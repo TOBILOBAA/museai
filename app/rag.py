@@ -145,6 +145,23 @@ def build_context_for_query(query: str, k: int = 3) -> str:
 
     return "\n---\n".join(chunks)
 
+def build_context_for_artifact_id(artifact_id: int) -> str:
+    """Return RAG context specifically for a known artifact."""
+    _, df = load_vectorstore()  # loads FAISS + metadata
+
+    row = df[df["artifact_id"] == artifact_id]
+    if row.empty:
+        return "No RAG context found for this artifact."
+
+    r = row.iloc[0]
+
+    return (
+        f"Artifact: {r['title']} (ID: {r['artifact_id']})\n"
+        f"Period: {r.get('period', 'Unknown')}\n"
+        f"Location: {r.get('location', 'Unknown')}\n"
+        f"Material: {r.get('material', 'Unknown')}\n"
+        f"Description: {r['base_context']}\n"
+    )
 
 # Simple manual test when you run: python app/rag.py
 if __name__ == "__main__":

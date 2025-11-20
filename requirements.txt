@@ -1,5 +1,6 @@
 streamlit                                   # UI
 google-cloud-vision                         # Image unnderstanding / OCR - Optical Character Recognition
+google-cloud-speech                         # Google Speech-to-Text client
 google-cloud-storage                        # Load metadata & imahes from GCS
 google-cloud-aiplatform                     # Gemini API & embeddings
 vertexai                                    # Gemini API & embeddings
