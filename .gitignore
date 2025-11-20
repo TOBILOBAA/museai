@@ -1,0 +1,31 @@
+# Virtual environment
+venv/
+env/
+
+# Environment variables
+.env
+
+# Google Cloud credentials
+service-account.json
+*.json
+*.key
+*.pem
+*.crt
+
+# Audio files from ElevenLabs
+audio_output/
+voice_temp/
+*.wav
+*.mp3
+
+# Cache and temporary files
+__pycache__/
+*.pyc
+.tmp/
+
+# Local artifacts & datasets
+artifacts/
+data/
+
+# Streamlit cache
+.streamlit/
