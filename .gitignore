@@ -22,6 +22,10 @@ voice_temp/
 __pycache__/
 *.pyc
 .tmp/
+data/artifacts_index.faiss
+data/artifacts_metadata.parquet
+service-account.json
+credentials.json
 
 # Local artifacts & datasets
 artifacts/
