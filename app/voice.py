@@ -4,6 +4,8 @@ load_dotenv()
 import os
 from pathlib import Path
 from typing import Literal
+import io
+import wave  # to read WAV header and detect sample rate
 
 from google.cloud import speech_v1p1beta1 as speech
 
@@ -21,6 +23,9 @@ LANGUAGE_CODE_MAP = {
     "he": "he-IL",   # Hebrew
     "fr": "fr-FR",   # French
 }
+
+# Reverse map: Google language code -> our short code
+REV_LANGUAGE_CODE_MAP = {v: k for k, v in LANGUAGE_CODE_MAP.items()}
 
 
 def get_gcp_language_code(lang: LanguageCode) -> str:
@@ -45,6 +50,16 @@ def _get_speech_client() -> speech.SpeechClient:
         # Not strictly needed by Speech, but good sanity check for our env
         raise RuntimeError("GCP_PROJECT_ID is not set in environment (.env).")
     return speech.SpeechClient()
+
+
+def detect_sample_rate(audio_bytes: bytes) -> int:
+    """
+    Read WAV bytes and detect the real sample rate from the header.
+    This fixes the 400 error when the header is 44100 Hz but we
+    hard-code 48000 Hz.
+    """
+    with wave.open(io.BytesIO(audio_bytes)) as wav_file:
+        return wav_file.getframerate()
 
 
 def transcribe_audio_bytes(
@@ -73,11 +88,14 @@ def transcribe_audio_bytes(
     client = _get_speech_client()
     language_code = get_gcp_language_code(lang)
 
+    # Auto-detect real sample rate from the WAV header
+    real_rate = detect_sample_rate(audio_bytes)
+
     audio = speech.RecognitionAudio(content=audio_bytes)
 
     config = speech.RecognitionConfig(
         encoding=speech.RecognitionConfig.AudioEncoding.LINEAR16,
-        sample_rate_hertz=sample_rate_hz,
+        sample_rate_hertz=real_rate,  # use detected rate instead of hard-coded
         language_code=language_code,
         enable_automatic_punctuation=True,
         model="default",
@@ -89,6 +107,64 @@ def transcribe_audio_bytes(
     chunks = [result.alternatives[0].transcript for result in response.results]
     transcript = " ".join(chunks).strip()
     return transcript
+
+
+def transcribe_audio_bytes_auto(
+    audio_bytes: bytes,
+    sample_rate_hz: int = 48000,
+) -> tuple[str, str]:
+    """
+    Like transcribe_audio_bytes, but we let Google STT auto-pick between
+    English, French and Hebrew.
+
+    Returns
+    -------
+    (transcript, detected_lang)
+      transcript: str
+      detected_lang: 'en' | 'fr' | 'he' | 'unsupported'
+    """
+    client = _get_speech_client()
+
+    # Detect sample rate from the WAV header
+    real_rate = detect_sample_rate(audio_bytes)
+
+    audio = speech.RecognitionAudio(content=audio_bytes)
+
+    # Tell STT: try these 3 languages
+    # language_code is the "primary", alternative_language_codes are backups.
+    config = speech.RecognitionConfig(
+        encoding=speech.RecognitionConfig.AudioEncoding.LINEAR16,
+        sample_rate_hertz=real_rate,
+        language_code=LANGUAGE_CODE_MAP["en"],
+        alternative_language_codes=[
+            LANGUAGE_CODE_MAP["fr"],
+            LANGUAGE_CODE_MAP["he"],
+        ],
+        enable_automatic_punctuation=True,
+        model="default",
+    )
+
+    response = client.recognize(config=config, audio=audio)
+
+    if not response.results:
+        return "", "unsupported"
+
+    # Text
+    chunks = [result.alternatives[0].transcript for result in response.results]
+    transcript = " ".join(chunks).strip()
+
+    # Language: try to read from the first alternative; fall back to config
+    first_result = response.results[0]
+    first_alt = first_result.alternatives[0]
+
+    # v1p1beta1 may put language_code either on result or on alternative
+    gcp_lang_code = getattr(first_alt, "language_code", None) or getattr(
+        first_result, "language_code", LANGUAGE_CODE_MAP["en"]
+    )
+
+    detected_lang = REV_LANGUAGE_CODE_MAP.get(gcp_lang_code, "unsupported")
+
+    return transcript, detected_lang
 
 
 def transcribe_audio_file(
