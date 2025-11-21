@@ -3,9 +3,7 @@ load_dotenv()
 
 import os
 from pathlib import Path
-from typing import Literal
-import io
-import wave  # to read WAV header and detect sample rate
+from typing import Literal, Tuple
 
 from google.cloud import speech_v1p1beta1 as speech
 
@@ -23,9 +21,6 @@ LANGUAGE_CODE_MAP = {
     "he": "he-IL",   # Hebrew
     "fr": "fr-FR",   # French
 }
-
-# Reverse map: Google language code -> our short code
-REV_LANGUAGE_CODE_MAP = {v: k for k, v in LANGUAGE_CODE_MAP.items()}
 
 
 def get_gcp_language_code(lang: LanguageCode) -> str:
@@ -52,51 +47,34 @@ def _get_speech_client() -> speech.SpeechClient:
     return speech.SpeechClient()
 
 
-def detect_sample_rate(audio_bytes: bytes) -> int:
-    """
-    Read WAV bytes and detect the real sample rate from the header.
-    This fixes the 400 error when the header is 44100 Hz but we
-    hard-code 48000 Hz.
-    """
-    with wave.open(io.BytesIO(audio_bytes)) as wav_file:
-        return wav_file.getframerate()
-
-
-def transcribe_audio_bytes(
+def _recognize_with_multilang(
     audio_bytes: bytes,
-    lang: LanguageCode = "en",
-    sample_rate_hz: int = 48000,
-) -> str:
+    lang_hint: LanguageCode | None = None,
+) -> Tuple[str, LanguageCode]:
     """
-    Main function you will call from the app.
-
-    Parameters
-    ----------
-    audio_bytes : bytes
-        Raw audio bytes (e.g. from Streamlit mic input or a WAV file).
-    lang : 'en' | 'he' | 'fr'
-        Desired transcription language.
-    sample_rate_hz : int
-        Sample rate of the audio. For now we assume 48 kHz
-        (we can adjust later when we integrate Streamlit).
-
-    Returns
-    -------
-    transcript : str
-        Concatenated transcript text.
+    Internal helper:
+    - Uses one primary language (hint) + the others as alternatives.
+    - Lets Google decide which of EN / FR / HE was actually spoken.
+    - Returns (transcript, detected_language_code).
     """
     client = _get_speech_client()
-    language_code = get_gcp_language_code(lang)
 
-    # Auto-detect real sample rate from the WAV header
-    real_rate = detect_sample_rate(audio_bytes)
+    # Choose primary + alternatives for EN/FR/HE
+    if lang_hint and lang_hint in LANGUAGE_CODE_MAP:
+        primary_full = LANGUAGE_CODE_MAP[lang_hint]
+    else:
+        primary_full = LANGUAGE_CODE_MAP["en"]
+
+    alt_full = [code for code in LANGUAGE_CODE_MAP.values() if code != primary_full]
 
     audio = speech.RecognitionAudio(content=audio_bytes)
 
+    # NOTE: we do NOT set sample_rate_hertz here.
+    # Google will read it from the WAV header, avoiding mismatch errors.
     config = speech.RecognitionConfig(
         encoding=speech.RecognitionConfig.AudioEncoding.LINEAR16,
-        sample_rate_hertz=real_rate,  # use detected rate instead of hard-coded
-        language_code=language_code,
+        language_code=primary_full,
+        alternative_language_codes=alt_full,
         enable_automatic_punctuation=True,
         model="default",
     )
@@ -106,76 +84,59 @@ def transcribe_audio_bytes(
     # Join all results into a single sentence/paragraph
     chunks = [result.alternatives[0].transcript for result in response.results]
     transcript = " ".join(chunks).strip()
-    return transcript
+
+    # Try to read the detected language from the first alternative
+    detected_full = primary_full
+    if response.results:
+        alt0 = response.results[0].alternatives[0]
+        if getattr(alt0, "language_code", None):
+            detected_full = alt0.language_code
+
+    # Map back to our short LanguageCode
+    detected_short: LanguageCode = "en"
+    for short, full in LANGUAGE_CODE_MAP.items():
+        if full == detected_full:
+            detected_short = short  # type: ignore[assignment]
+            break
+
+    return transcript, detected_short
 
 
-def transcribe_audio_bytes_auto(
+def transcribe_and_detect_language(
     audio_bytes: bytes,
-    sample_rate_hz: int = 48000,
-) -> tuple[str, str]:
+    lang_hint: LanguageCode | None = None,
+) -> Tuple[str, LanguageCode]:
     """
-    Like transcribe_audio_bytes, but we let Google STT auto-pick between
-    English, French and Hebrew.
-
-    Returns
-    -------
-    (transcript, detected_lang)
-      transcript: str
-      detected_lang: 'en' | 'fr' | 'he' | 'unsupported'
+    Main function for Streamlit:
+    - Takes raw audio bytes.
+    - Uses EN/FR/HE as possible languages.
+    - Returns (transcript, detected_language_code).
     """
-    client = _get_speech_client()
+    return _recognize_with_multilang(audio_bytes, lang_hint=lang_hint)
 
-    # Detect sample rate from the WAV header
-    real_rate = detect_sample_rate(audio_bytes)
 
-    audio = speech.RecognitionAudio(content=audio_bytes)
-
-    # Tell STT: try these 3 languages
-    # language_code is the "primary", alternative_language_codes are backups.
-    config = speech.RecognitionConfig(
-        encoding=speech.RecognitionConfig.AudioEncoding.LINEAR16,
-        sample_rate_hertz=real_rate,
-        language_code=LANGUAGE_CODE_MAP["en"],
-        alternative_language_codes=[
-            LANGUAGE_CODE_MAP["fr"],
-            LANGUAGE_CODE_MAP["he"],
-        ],
-        enable_automatic_punctuation=True,
-        model="default",
-    )
-
-    response = client.recognize(config=config, audio=audio)
-
-    if not response.results:
-        return "", "unsupported"
-
-    # Text
-    chunks = [result.alternatives[0].transcript for result in response.results]
-    transcript = " ".join(chunks).strip()
-
-    # Language: try to read from the first alternative; fall back to config
-    first_result = response.results[0]
-    first_alt = first_result.alternatives[0]
-
-    # v1p1beta1 may put language_code either on result or on alternative
-    gcp_lang_code = getattr(first_alt, "language_code", None) or getattr(
-        first_result, "language_code", LANGUAGE_CODE_MAP["en"]
-    )
-
-    detected_lang = REV_LANGUAGE_CODE_MAP.get(gcp_lang_code, "unsupported")
-
-    return transcript, detected_lang
+def transcribe_audio_bytes(
+    audio_bytes: bytes,
+    lang: LanguageCode = "en",
+    sample_rate_hz: int | None = None,
+) -> str:
+    """
+    Backwards-compatible wrapper used in CLI tests.
+    Ignores sample_rate_hz and just returns transcript as a string.
+    """
+    transcript, _ = _recognize_with_multilang(audio_bytes, lang_hint=lang)
+    return transcript
 
 
 def transcribe_audio_file(
     file_path: str | Path,
     lang: LanguageCode = "en",
-    sample_rate_hz: int = 48000,
+    sample_rate_hz: int | None = None,
 ) -> str:
     """
     Convenience helper for CLI testing.
 
-    Reads a local audio file (e.g., a small mono 16kHz WAV) and
+    Reads a local audio file (e.g., a small mono WAV) and
     returns the transcript using transcribe_audio_bytes().
     """
     path = Path(file_path)

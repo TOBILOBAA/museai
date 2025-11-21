@@ -6,7 +6,7 @@ from typing import Literal
 import streamlit as st
 
 from app.vision import classify_artifact_from_image
-from app.voice import transcribe_audio_bytes_auto
+from app.voice import transcribe_and_detect_language, LanguageCode
 from app.reasoning import museai_reason
 from app.tts import tts_generate_audio
 
@@ -240,28 +240,31 @@ def render_conversation_area():
                 unsafe_allow_html=True,
             )
 
+    # No new recording yet → just show the history
     if audio_file is None:
         return
 
     # ---------------------------------------------------------------
     # Once we have audio, run the full pipeline:
-    # STT -> RAG reasoning -> TTS, then append to chat.
+    # STT (with language detection) -> RAG reasoning -> TTS,
+    # then append to chat.
     # ---------------------------------------------------------------
     with st.spinner("Transcribing your question…"):
         audio_bytes = audio_file.getvalue()
         # Auto-detect between English / French / Hebrew
-        transcript, detected_lang = transcribe_audio_bytes_auto(audio_bytes)
+        transcript, detected_lang = transcribe_and_detect_language(audio_bytes)
 
     if not transcript:
         st.error("I couldn’t hear anything. Please try speaking again.")
         return
 
+    # Add user message to chat
     st.session_state.chat.append({"role": "user", "text": transcript})
 
     # Decide which language to answer in
     if detected_lang in ("en", "fr", "he"):
         reply_language = detected_lang
-        # keep UI in sync with what we detected
+        # keep UI language in sync with what we detected
         st.session_state.language = detected_lang
     else:
         reply_language = "en"
@@ -270,9 +273,9 @@ def render_conversation_area():
     if isinstance(st.session_state.artifact, dict):
         artifact_id = st.session_state.artifact.get("artifact_id")
 
-    # If we don't support the detected language, prepend a short notice in English
+    # If we don't support the detected language, prepend a short notice
     notice_prefix = ""
-    if detected_lang == "unsupported":
+    if detected_lang not in ("en", "fr", "he"):
         notice_prefix = (
             "I heard a language I don’t fully support yet. "
             "I’ll answer in English for now.\n\n"
@@ -285,6 +288,33 @@ def render_conversation_area():
             language=reply_language,
         )
 
+    # Handle both string or dict response from museai_reason
+    if isinstance(llm_raw, dict):
+        answer_text = (
+            llm_raw.get("answer")
+            or llm_raw.get("text")
+            or str(llm_raw)
+        )
+    else:
+        answer_text = str(llm_raw)
+
+    # Add any notice prefix (for unsupported languages)
+    answer_text = notice_prefix + answer_text
+
+    # Add assistant message to chat
+    st.session_state.chat.append({"role": "assistant", "text": answer_text})
+
+    # Text → speech
+    with st.spinner("Preparing audio answer…"):
+        audio_out_path = tts_generate_audio(
+            text=answer_text,
+            language=reply_language,
+        )
+        st.session_state.last_audio_path = audio_out_path
+
+    st.success("New answer from MuseAI 👇")
+    if st.session_state.last_audio_path:
+        st.audio(st.session_state.last_audio_path)
 
 # ------------------------------------------------------------------------------------
 # Main app
