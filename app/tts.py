@@ -1,4 +1,5 @@
 import os
+import streamlit as st
 from pathlib import Path
 from dotenv import load_dotenv
 from elevenlabs import ElevenLabs, VoiceSettings
@@ -7,13 +8,21 @@ from elevenlabs import ElevenLabs, VoiceSettings
 BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR / ".env")
 
-ELEVEN_API_KEY = os.getenv("ELEVENLABS_API_KEY")
-if not ELEVEN_API_KEY:
-    raise RuntimeError("ELEVENLABS_API_KEY is not set in .env")
+# Try local .env first (for your laptop), then Streamlit Cloud secrets
+ELEVEN_API_KEY = (
+    os.getenv("ELEVENLABS_API_KEY")
+    or st.secrets.get("ELEVENLABS_API_KEY")
+)
 
-VOICE_ID_MULTI = os.getenv("VOICE_ID_MULTI")
+if not ELEVEN_API_KEY:
+    raise RuntimeError("ELEVENLABS_API_KEY is not set in environment or secrets")
+
+VOICE_ID_MULTI = (
+    os.getenv("VOICE_ID_MULTI")
+    or st.secrets.get("VOICE_ID_MULTI")
+)
 if not VOICE_ID_MULTI:
-    raise RuntimeError("VOICE_ID_MULTI is not set in .env")
+    raise RuntimeError("VOICE_ID_MULTI is not set in environment or secrets")
 
 client = ElevenLabs(api_key=ELEVEN_API_KEY)
 
