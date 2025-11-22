@@ -2,14 +2,11 @@ from dotenv import load_dotenv
 load_dotenv()
 
 import os
-<<<<<<< HEAD
 import json
 from pathlib import Path
 from typing import List, Dict
 
 
-=======
->>>>>>> 0823dc0b (debuggin)
 import faiss
 import json
 import numpy as np

@@ -3,19 +3,11 @@ load_dotenv()
 
 import os
 import json
-<<<<<<< HEAD
-=======
-import streamlit as st
->>>>>>> 0823dc0b (debuggin)
 from pathlib import Path
 from typing import Literal, Tuple
 
 from google.cloud import speech_v1p1beta1 as speech
 from google.oauth2 import service_account
-<<<<<<< HEAD
-
-=======
->>>>>>> 0823dc0b (debuggin)
 
 # ===== Config / Environment =====
 
