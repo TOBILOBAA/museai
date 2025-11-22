@@ -16,7 +16,7 @@ from app.tts import tts_generate_audio
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-LanguageCode = Literal["en", "fr", "he"]
+# LanguageCode = Literal["en", "fr", "he"]
 
 LANG_OPTIONS = {
     "English 🇬🇧": "en",

@@ -11,3 +11,4 @@ pandas                                      # Data processing library
 Pillow                                      # Image manipulation
 python-dotenv                               # Load API keys 
 tiktoken                                    # Token counting & safety
+faiss-cpu                                   # Reasoning pipeline
