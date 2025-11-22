@@ -109,66 +109,62 @@ def make_image_part(image: Path | str):
 
 def _load_sa_credentials():
     """
-    Load service account credentials from (in order):
-    1) Streamlit secrets (for Streamlit Cloud)
+    Load service account credentials in this order:
+    1) Streamlit Cloud secrets["GCP_SERVICE_ACCOUNT_JSON"]
     2) Env var GCP_SERVICE_ACCOUNT_JSON
-    3) Local file pointed to by GOOGLE_APPLICATION_CREDENTIALS
+    3) File pointed to by GOOGLE_APPLICATION_CREDENTIALS
 
-    If none are found, raise an error (do NOT fall back to GCE metadata).
+    If nothing works, raise so we don't silently fall back to metadata server.
     """
     info = None
 
-    # 1) Streamlit secrets
+    # 1) Streamlit secrets (Streamlit Cloud)
     try:
         import streamlit as st
-        if "GCP_SERVICE_ACCOUNT_JSON" in st.secrets:
-            sa_value = st.secrets["GCP_SERVICE_ACCOUNT_JSON"]
-            if isinstance(sa_value, dict):
-                info = sa_value
+        sa_json = st.secrets.get("GCP_SERVICE_ACCOUNT_JSON")
+        if sa_json:
+            # secrets can be parsed as dict or string
+            if isinstance(sa_json, dict):
+                info = sa_json
             else:
-                info = json.loads(sa_value)
-            print("[vision._load_sa_credentials] Using SA from st.secrets")
+                info = json.loads(sa_json)
+            return service_account.Credentials.from_service_account_info(info)
     except Exception as e:
-        print(f"[vision._load_sa_credentials] Could not read st.secrets: {e}")
+        print("[_load_sa_credentials] failed reading st.secrets:", e)
 
-    # 2) Env var
-    if info is None:
-        sa_env = os.getenv("GCP_SERVICE_ACCOUNT_JSON")
-        if sa_env:
-            try:
-                info = json.loads(sa_env)
-                print("[vision._load_sa_credentials] Using SA from env GCP_SERVICE_ACCOUNT_JSON")
-            except Exception as e:
-                print(f"[vision._load_sa_credentials] Failed to parse env GCP_SERVICE_ACCOUNT_JSON: {e}")
+    # 2) Environment variable (local dev or other hosts)
+    sa_env = os.getenv("GCP_SERVICE_ACCOUNT_JSON")
+    if sa_env:
+        try:
+            info = json.loads(sa_env)
+            return service_account.Credentials.from_service_account_info(info)
+        except Exception as e:
+            print("[_load_sa_credentials] failed parsing GCP_SERVICE_ACCOUNT_JSON env:", e)
 
-    # 3) Local file (for your laptop dev)
-    if info is None:
-        sa_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
-        if sa_path and Path(sa_path).exists():
-            try:
-                info = json.loads(Path(sa_path).read_text())
-                print(f"[vision._load_sa_credentials] Using SA from file {sa_path}")
-            except Exception as e:
-                print(f"[vision._load_sa_credentials] Failed to read GOOGLE_APPLICATION_CREDENTIALS file: {e}")
+    # 3) Local JSON file (GOOGLE_APPLICATION_CREDENTIALS)
+    sa_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+    if sa_path and Path(sa_path).exists():
+        try:
+            return service_account.Credentials.from_service_account_file(sa_path)
+        except Exception as e:
+            print("[_load_sa_credentials] failed loading GOOGLE_APPLICATION_CREDENTIALS file:", e)
 
-    if info is None:
-        raise RuntimeError(
-            "No service account JSON found. "
-            "Set GCP_SERVICE_ACCOUNT_JSON (secret or env) or GOOGLE_APPLICATION_CREDENTIALS."
-        )
-
-    return service_account.Credentials.from_service_account_info(info)
+    # If we get here, we really have no usable credentials
+    raise RuntimeError(
+        "No service account JSON found. "
+        "Set GCP_SERVICE_ACCOUNT_JSON (Streamlit secret or env) or GOOGLE_APPLICATION_CREDENTIALS."
+    )
 
 
 def init_vertex():
     """
-    Initialize Vertex AI client with project + location using explicit SA creds.
+    Initialize Vertex AI client with project + location, ALWAYS using explicit
+    service account credentials (no metadata server fallback).
     """
     if not GCP_PROJECT_ID:
         raise RuntimeError("GCP_PROJECT_ID is not set in environment (.env or secrets).")
 
     creds = _load_sa_credentials()
-
     vertexai.init(
         project=GCP_PROJECT_ID,
         location=GCP_LOCATION,
