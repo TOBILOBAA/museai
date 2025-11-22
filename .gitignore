@@ -1,35 +1,58 @@
-# Virtual environment
+##############################################
+# ENVIRONMENTS
+##############################################
 venv/
 env/
-
-# Environment variables
+.venv/
 .env
 
-# Google Cloud credentials
+##############################################
+# CREDENTIALS & SECURITY
+##############################################
+# Don’t upload your GCP / ElevenLabs keys
 service-account.json
-*.json
+credentials.json
 *.key
 *.pem
 *.crt
+*.json  # keep ignoring all general JSON creds
 
-# Audio files from ElevenLabs
-audio_output/
-voice_temp/
-*.wav
-*.mp3
-
-# Cache and temporary files
+##############################################
+# PYTHON CACHE
+##############################################
 __pycache__/
 *.pyc
 .tmp/
+
+##############################################
+# STREAMLIT CACHE
+##############################################
+.streamlit/
+
+##############################################
+# AUDIO & TEMP FILES
+##############################################
+audio_output/
+voice_temp/
+data/tmp_images/
+*.wav
+*.mp3
+
+##############################################
+# ARTIFACTS VECTORSTORE (always regenerate)
+##############################################
 data/artifacts_index.faiss
 data/artifacts_metadata.parquet
-service-account.json
-credentials.json
 
-# Local artifacts & datasets
-artifacts/
-data/
+##############################################
+# DATA FOLDER CONTROL
+##############################################
+# Ignore everything inside /data EXCEPT the artifact metadata file.
+data/*
+!data/artifacts.csv
 
-# Streamlit cache
-.streamlit/
+##############################################
+# CSV (global ignore but allow artifacts.csv)
+##############################################
+*.csv
+!data/artifacts.csv

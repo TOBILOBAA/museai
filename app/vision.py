@@ -1,6 +1,3 @@
-from dotenv import load_dotenv
-load_dotenv()
-
 import os
 import json
 from pathlib import Path
@@ -10,6 +7,10 @@ import pandas as pd
 import mimetypes
 import vertexai
 from vertexai.generative_models import GenerativeModel, Part
+from google.api_core.exceptions import GoogleAPICallError, ServiceUnavailable
+
+from PIL import Image
+import io
 
 # ====== Paths & Config ======
 BASE_DIR = Path(__file__).resolve().parent.parent  # museai/
@@ -20,40 +21,50 @@ GCP_PROJECT_ID = os.getenv("GCP_PROJECT_ID")
 GCP_LOCATION = os.getenv("GCP_LOCATION", "us-central1")
 VISION_MODEL_NAME = os.getenv("VISION_MODEL_NAME", "gemini-2.0-flash-001")
 
-# ===== Helper: normalize image input for Gemini Vision =====
 
-def make_image_part(image):
+# ===== Helper: resize + normalize image for Gemini Vision =====
+
+def prepare_image_bytes(path: Path, max_side: int = 1024) -> bytes:
     """
-    Accepts:
-      - Streamlit uploaded/camera input (has .getvalue())
-      - OR a local file path (Path or str)
+    Open the image, downscale it so the longest side <= max_side,
+    and return JPEG bytes.
 
-    Returns:
-      - A Gemini Part object ready for the Vision model
+    This keeps payload small enough for cloud inference and avoids
+    issues with giant phone camera images.
     """
+    with Image.open(path) as img:
+        img = img.convert("RGB")  # ensure 3-channel
+        w, h = img.size
+        long_side = max(w, h)
+
+        if long_side > max_side:
+            scale = max_side / float(long_side)
+            new_size = (int(w * scale), int(h * scale))
+            img = img.resize(new_size, Image.LANCZOS)
+
+        buf = io.BytesIO()
+        img.save(buf, format="JPEG", quality=85)
+        return buf.getvalue()
 
 
-    # -------- CASE 1: Streamlit upload (BytesIO-like object) --------
-    if hasattr(image, "getvalue"):
-        return Part.from_data(
-            data=image.getvalue(),
-            mime_type="image/jpeg"  # Good default; can refine later
-        )
+def make_image_part(image: Path | str):
+    """
+    For this app we only expect:
+      - A local file path (Path or str) saved from Streamlit camera_input.
 
-    # -------- CASE 2: Local file path --------
+    We:
+      1. Downscale the photo (see prepare_image_bytes)
+      2. Wrap it as a Gemini Part with the correct mime_type.
+    """
     path = Path(image)
     if not path.exists():
         raise FileNotFoundError(f"Image file does not exist: {path}")
 
-    mime, _ = mimetypes.guess_type(str(path))
-    if mime is None:
-        mime = "image/jpeg"
-
+    img_bytes = prepare_image_bytes(path)
     return Part.from_data(
-        data=path.read_bytes(),
-        mime_type=mime
+        data=img_bytes,
+        mime_type="image/jpeg",
     )
-
 
 
 # ====== Vertex init / model loader ======
@@ -82,16 +93,6 @@ def get_vision_model() -> GenerativeModel:
 def load_artifacts() -> pd.DataFrame:
     """
     Load the artifacts table you created in artifacts.csv.
-
-    Columns we expect:
-    - artifact_id
-    - title
-    - short_label
-    - location
-    - image_filename
-    - period
-    - material
-    - base_context
     """
     if not ARTIFACTS_CSV.exists():
         raise FileNotFoundError(f"Artifacts CSV not found: {ARTIFACTS_CSV}")
@@ -103,10 +104,6 @@ def load_artifacts() -> pd.DataFrame:
 def build_artifact_prompt(df: pd.DataFrame) -> str:
     """
     Build a text description of all known artifacts for Gemini.
-
-    We tell the model:
-    - Here is the list of possible artifacts (with id, title, description).
-    - Look at the uploaded image and choose the *closest* match.
     """
     lines: List[str] = []
     lines.append(
@@ -147,12 +144,10 @@ def build_artifact_prompt(df: pd.DataFrame) -> str:
 
 # ====== Main classification function ======
 
-def classify_artifact_from_image(image) -> Dict[str, Any]:
+def classify_artifact_from_image(image_path: Path | str) -> Dict[str, Any]:
     """
-    Given an image (either:
-      - Streamlit uploaded/camera object (has .getvalue()), OR
-      - Local file path (str or Path)
-    ask Gemini Vision to decide which known artifact it is most likely showing.
+    Given an image path (photo taken in museum), ask Gemini Vision to decide
+    which known artifact it is most likely showing.
 
     Returns a dict with:
     - artifact_id
@@ -160,27 +155,36 @@ def classify_artifact_from_image(image) -> Dict[str, Any]:
     - confidence
     - reason
     """
-    # Only check the filesystem if this looks like a path (no .getvalue)
-    if not hasattr(image, "getvalue"):
-        image_path = Path(image)
-        if not image_path.exists():
-            raise FileNotFoundError(f"Image file not found: {image_path}")
+    image_path = Path(image_path)
+    if not image_path.exists():
+        raise FileNotFoundError(f"Image file not found: {image_path}")
 
     df = load_artifacts()
     prompt = build_artifact_prompt(df)
 
     model = get_vision_model()
+    img_part = make_image_part(image_path)
 
-    # Build the input for Gemini: text prompt + image
-    img_part = make_image_part(image)
-
-    response = model.generate_content(
-        [prompt, img_part],
-        generation_config={
-            "temperature": 0.2,
-            "response_mime_type": "application/json",
-        },
-    )
+    try:
+        response = model.generate_content(
+            [prompt, img_part],
+            generation_config={
+                "temperature": 0.2,
+                "response_mime_type": "application/json",
+            },
+        )
+    except ServiceUnavailable as e:
+        # This is what you just saw in Streamlit Cloud
+        # You can log this in Streamlit as well later if needed.
+        raise RuntimeError(
+            "Gemini Vision service is temporarily unavailable. "
+            "Please wait a moment and try capturing the artifact again."
+        ) from e
+    except GoogleAPICallError as e:
+        # Catch other API-level issues, so your app doesn't just crash.
+        raise RuntimeError(
+            f"Error calling Gemini Vision API: {e}"
+        ) from e
 
     # response.text should be a JSON string according to our instructions
     try:
@@ -199,28 +203,13 @@ def classify_artifact_from_image(image) -> Dict[str, Any]:
     return result
 
 
-# ====== Quick manual test ======
 if __name__ == "__main__":
-    """
-    Run this from project root:
-
-        (venv) python app/vision.py
-
-    or:
-
-        (venv) python app/vision.py /path/to/test_image.jpg
-
-    For now we just hard-code a test path inside data/images.
-    """
     import sys
-
     if len(sys.argv) > 1:
         test_image = Path(sys.argv[1])
     else:
-        # Adjust this to whatever image you add later
         test_image = DATA_DIR / "images" / "lamp_ancient.jpg"
 
     print(f"Testing classification with image: {test_image}")
-    result = classify_artifact_from_image(test_image)
-    print("\nGemini classification result:\n")
-    print(json.dumps(result, indent=2))
+    out = classify_artifact_from_image(test_image)
+    print(json.dumps(out, indent=2, ensure_ascii=False))
