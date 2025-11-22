@@ -118,37 +118,43 @@ def init_vertex():
 
     creds = None
 
-    # Try to load credentials from Streamlit secrets (for Streamlit Cloud)
+    # 1) Try Streamlit secrets
     try:
         import streamlit as st
-
         if "GCP_SERVICE_ACCOUNT_JSON" in st.secrets:
             sa_value = st.secrets["GCP_SERVICE_ACCOUNT_JSON"]
-
-            # Streamlit may return a string (multiline JSON) or a dict
             if isinstance(sa_value, dict):
                 info = sa_value
             else:
                 info = json.loads(sa_value)
-
             creds = service_account.Credentials.from_service_account_info(info)
-            print("[vision.init_vertex] Using service account from Streamlit secrets")
+            print("[vision.init_vertex] Using service account from st.secrets")
     except Exception as e:
-        # On local dev, `streamlit` may not be installed – that's fine.
-        print(f"[vision.init_vertex] Could not load SA from secrets, will try ADC. Error: {e}")
-        creds = None
+        print(f"[vision.init_vertex] Could not load SA from st.secrets: {e}")
 
-    if creds is not None:
-        # ✅ Streamlit Cloud path: explicit service account, no metadata server
+    # 2) If still nothing, try env var (Streamlit Cloud also exposes secrets as env)
+    if creds is None:
+        sa_env = os.getenv("GCP_SERVICE_ACCOUNT_JSON")
+        if sa_env:
+            try:
+                info = json.loads(sa_env)
+                creds = service_account.Credentials.from_service_account_info(info)
+                print("[vision.init_vertex] Using service account from env GCP_SERVICE_ACCOUNT_JSON")
+            except Exception as e:
+                print(f"[vision.init_vertex] Failed to parse GCP_SERVICE_ACCOUNT_JSON env: {e}")
+
+    # 3) If we STILL don't have creds, don't silently fall back.
+    if creds is None:
+        # Local dev will probably have GOOGLE_APPLICATION_CREDENTIALS set,
+        # but for Streamlit Cloud we *must* use the SA JSON.
+        print("[vision.init_vertex] No SA creds found, falling back to application default.")
+        vertexai.init(project=GCP_PROJECT_ID, location=GCP_LOCATION)
+    else:
         vertexai.init(
             project=GCP_PROJECT_ID,
             location=GCP_LOCATION,
             credentials=creds,
         )
-    else:
-        # ✅ Local dev path: uses GOOGLE_APPLICATION_CREDENTIALS or gcloud user creds
-        print("[vision.init_vertex] Using default application credentials (local dev).")
-        vertexai.init(project=GCP_PROJECT_ID, location=GCP_LOCATION)
 
 
 def get_vision_model() -> GenerativeModel:

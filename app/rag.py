@@ -73,32 +73,42 @@ def init_vertex():
         raise RuntimeError("GCP_PROJECT_ID is not set in environment (.env or secrets).")
 
     creds = None
+
+    # 1) Streamlit secrets
     try:
         import streamlit as st
-
         if "GCP_SERVICE_ACCOUNT_JSON" in st.secrets:
             sa_value = st.secrets["GCP_SERVICE_ACCOUNT_JSON"]
-
             if isinstance(sa_value, dict):
                 info = sa_value
             else:
                 info = json.loads(sa_value)
-
             creds = service_account.Credentials.from_service_account_info(info)
-            print("[rag.init_vertex] Using service account from Streamlit secrets")
+            print("[rag.init_vertex] Using service account from st.secrets")
     except Exception as e:
-        print(f"[rag.init_vertex] Could not load SA from secrets, will try ADC. Error: {e}")
-        creds = None
+        print(f"[rag.init_vertex] Could not load SA from st.secrets: {e}")
 
-    if creds is not None:
+    # 2) Env var
+    if creds is None:
+        sa_env = os.getenv("GCP_SERVICE_ACCOUNT_JSON")
+        if sa_env:
+            try:
+                info = json.loads(sa_env)
+                creds = service_account.Credentials.from_service_account_info(info)
+                print("[rag.init_vertex] Using service account from env GCP_SERVICE_ACCOUNT_JSON")
+            except Exception as e:
+                print(f"[rag.init_vertex] Failed to parse GCP_SERVICE_ACCOUNT_JSON env: {e}")
+
+    # 3) Fallback
+    if creds is None:
+        print("[rag.init_vertex] No SA creds found, falling back to application default.")
+        vertexai.init(project=GCP_PROJECT_ID, location=GCP_LOCATION)
+    else:
         vertexai.init(
             project=GCP_PROJECT_ID,
             location=GCP_LOCATION,
             credentials=creds,
         )
-    else:
-        print("[rag.init_vertex] Using default application credentials (local dev).")
-        vertexai.init(project=GCP_PROJECT_ID, location=GCP_LOCATION)
 
 
 def get_embedding_model() -> TextEmbeddingModel:
