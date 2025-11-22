@@ -1,3 +1,6 @@
+from dotenv import load_dotenv
+load_dotenv()
+
 import os
 import json
 from pathlib import Path
@@ -6,6 +9,7 @@ from typing import Dict, Any, List
 import pandas as pd
 import mimetypes
 import vertexai
+from google.oauth2 import service_account
 from vertexai.generative_models import GenerativeModel, Part
 from google.api_core.exceptions import GoogleAPICallError, ServiceUnavailable
 
@@ -69,6 +73,8 @@ def make_image_part(image: Path | str):
 
 # ====== Vertex init / model loader ======
 
+# add this import near the top if it's not there yet
+
 def init_vertex():
     """
     Initialize Vertex AI client with project + location.
@@ -76,8 +82,25 @@ def init_vertex():
     We call this once before using any Gemini model.
     """
     if not GCP_PROJECT_ID:
-        raise RuntimeError("GCP_PROJECT_ID is not set in environment (.env).")
-    vertexai.init(project=GCP_PROJECT_ID, location=GCP_LOCATION)
+        raise RuntimeError("GCP_PROJECT_ID is not set in environment (.env or secrets).")
+
+    # Try to load credentials from Streamlit secrets (for Streamlit Cloud)
+    creds = None
+    try:
+        import streamlit as st
+        sa_json = st.secrets.get("GCP_SERVICE_ACCOUNT_JSON")
+        if sa_json:
+            info = json.loads(sa_json)
+            creds = service_account.Credentials.from_service_account_info(info)
+    except Exception:
+        # If streamlit isn't available or secrets missing, we fall back
+        creds = None
+
+    if creds is not None:
+        vertexai.init(project=GCP_PROJECT_ID, location=GCP_LOCATION, credentials=creds)
+    else:
+        # Local dev: will use GOOGLE_APPLICATION_CREDENTIALS or other ADC
+        vertexai.init(project=GCP_PROJECT_ID, location=GCP_LOCATION)
 
 
 def get_vision_model() -> GenerativeModel:

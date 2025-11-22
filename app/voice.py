@@ -2,10 +2,13 @@ from dotenv import load_dotenv
 load_dotenv()
 
 import os
+import json
 from pathlib import Path
 from typing import Literal, Tuple
 
 from google.cloud import speech_v1p1beta1 as speech
+from google.oauth2 import service_account
+
 
 # ===== Config / Environment =====
 
@@ -36,15 +39,31 @@ def get_gcp_language_code(lang: LanguageCode) -> str:
 
 # ===== Core STT functions =====
 
+
+
 def _get_speech_client() -> speech.SpeechClient:
     """
-    Create a SpeechClient using the credentials from GOOGLE_APPLICATION_CREDENTIALS.
-    Safe to call multiple times; the underlying channel is reused by gRPC.
+    Create a SpeechClient using explicit service account credentials if available.
+    Falls back to Application Default Credentials for local dev.
     """
     if not GCP_PROJECT_ID:
-        # Not strictly needed by Speech, but good sanity check for our env
-        raise RuntimeError("GCP_PROJECT_ID is not set in environment (.env).")
-    return speech.SpeechClient()
+        raise RuntimeError("GCP_PROJECT_ID is not set in environment (.env or secrets).")
+
+    creds = None
+    try:
+        import streamlit as st
+        sa_json = st.secrets.get("GCP_SERVICE_ACCOUNT_JSON")
+        if sa_json:
+            info = json.loads(sa_json)
+            creds = service_account.Credentials.from_service_account_info(info)
+    except Exception:
+        creds = None
+
+    if creds is not None:
+        return speech.SpeechClient(credentials=creds)
+    else:
+        # Local dev where GOOGLE_APPLICATION_CREDENTIALS is set
+        return speech.SpeechClient()
 
 
 def _recognize_with_multilang(
