@@ -41,8 +41,8 @@ data/tmp_images/
 ##############################################
 # ARTIFACTS VECTORSTORE (always regenerate)
 ##############################################
-data/artifacts_index.faiss
-data/artifacts_metadata.parquet
+# data/artifacts_index.faiss
+# data/artifacts_metadata.parquet
 
 ##############################################
 # DATA FOLDER CONTROL
@@ -54,5 +54,5 @@ data/*
 ##############################################
 # CSV (global ignore but allow artifacts.csv)
 ##############################################
-*.csv
+# *.csv
 !data/artifacts.csv
