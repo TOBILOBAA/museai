@@ -6,6 +6,11 @@ import json
 from pathlib import Path
 from typing import Literal, Tuple
 
+try:
+    import streamlit as st   # available on Streamlit Cloud
+except Exception:
+    st = None               # harmless fallback for local CLI tests
+
 from google.cloud import speech_v1p1beta1 as speech
 from google.oauth2 import service_account
 
@@ -124,8 +129,8 @@ def _get_speech_client() -> speech.SpeechClient:
     Create a SpeechClient using explicit service account credentials.
     NO fallback to metadata-based default creds.
     """
-    if not GCP_PROJECT_ID:
-        raise RuntimeError("GCP_PROJECT_ID is not set in environment (.env or secrets).")
+    # Just to validate config; we don't actually pass project into the client
+    _ = _get_gcp_project()
 
     creds = _load_sa_credentials()
     return speech.SpeechClient(credentials=creds)
@@ -183,6 +188,22 @@ def _recognize_with_multilang(
             break
 
     return transcript, detected_short
+
+def _get_gcp_project() -> str:
+    """
+    Get GCP project from env or Streamlit secrets.
+    """
+    project = os.getenv("GCP_PROJECT_ID")
+
+    if not project and st is not None and "GCP_PROJECT_ID" in st.secrets:
+        project = st.secrets["GCP_PROJECT_ID"]
+
+    if not project:
+        raise RuntimeError(
+            "GCP_PROJECT_ID is not set in environment variables or Streamlit secrets."
+        )
+
+    return project
 
 
 def transcribe_and_detect_language(

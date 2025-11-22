@@ -3,9 +3,14 @@ load_dotenv()
 
 import os
 import json
-import streamlit as st
+# import streamlit as st
 from pathlib import Path
 from typing import Dict, Any, List
+
+try:
+    import streamlit as st   # available on Streamlit Cloud
+except Exception:
+    st = None               # harmless fallback for local CLI tests
 
 import pandas as pd
 import mimetypes
@@ -156,22 +161,64 @@ def _load_sa_credentials():
         "Set GCP_SERVICE_ACCOUNT_JSON (Streamlit secret or env) or GOOGLE_APPLICATION_CREDENTIALS."
     )
 
+def _get_gcp_config() -> tuple[str, str]:
+    """
+    Get project + location from env OR Streamlit secrets.
+    """
+    project = os.getenv("GCP_PROJECT_ID")
+    location = os.getenv("GCP_LOCATION") or "us-central1"
+
+    if st is not None:
+        if not project and "GCP_PROJECT_ID" in st.secrets:
+            project = st.secrets["GCP_PROJECT_ID"]
+        if "GCP_LOCATION" in st.secrets:
+            location = st.secrets["GCP_LOCATION"]
+
+    if not project:
+        raise RuntimeError(
+            "GCP_PROJECT_ID is not set in environment variables or Streamlit secrets."
+        )
+    return project, location
+
+
+def _load_sa_credentials():
+    """
+    Load Google Cloud service-account credentials from either:
+    - GOOGLE_APPLICATION_CREDENTIALS file (local dev), OR
+    - GCP_SERVICE_ACCOUNT_JSON in Streamlit secrets, OR
+    - GCP_SERVICE_ACCOUNT_JSON in env.
+    """
+    # Local JSON file
+    path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+    if path and Path(path).exists():
+        return service_account.Credentials.from_service_account_file(path)
+
+    # Streamlit Cloud: JSON string in secrets
+    if st is not None and "GCP_SERVICE_ACCOUNT_JSON" in st.secrets:
+        info = json.loads(st.secrets["GCP_SERVICE_ACCOUNT_JSON"])
+        return service_account.Credentials.from_service_account_info(info)
+
+    # Optional: JSON in env
+    sa_json = os.getenv("GCP_SERVICE_ACCOUNT_JSON")
+    if sa_json:
+        info = json.loads(sa_json)
+        return service_account.Credentials.from_service_account_info(info)
+
+    return None
 
 def init_vertex():
     """
-    Initialize Vertex AI client with project + location, ALWAYS using explicit
-    service account credentials (no metadata server fallback).
+    Initialize Vertex AI client with project + location + credentials.
+    Works both locally and on Streamlit Cloud.
     """
-
-    if not GCP_PROJECT_ID:
-        raise RuntimeError("GCP_PROJECT_ID is not set in environment (.env or secrets).")
-
+    project, location = _get_gcp_config()
     creds = _load_sa_credentials()
-    vertexai.init(
-        project=GCP_PROJECT_ID,
-        location=GCP_LOCATION,
-        credentials=creds,
-    )
+
+    if creds is not None:
+        vertexai.init(project=project, location=location, credentials=creds)
+    else:
+        # fallback – local dev with ADC
+        vertexai.init(project=project, location=location)
 
 
 def get_vision_model() -> GenerativeModel:
