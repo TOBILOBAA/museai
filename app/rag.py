@@ -2,6 +2,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 import os
+import json
 from pathlib import Path
 from typing import List, Dict
 
@@ -28,34 +29,58 @@ GCP_PROJECT_ID = os.getenv("GCP_PROJECT_ID")
 GCP_LOCATION = os.getenv("GCP_LOCATION", "us-central1")
 EMBEDDING_MODEL_NAME = "text-embedding-004"   # Gemini embedding model
 
+def _load_service_account_credentials():
+    """
+    Load service account credentials from either:
+    - Streamlit Cloud secrets["GCP_SERVICE_ACCOUNT_JSON"], or
+    - env var GCP_SERVICE_ACCOUNT_JSON (as JSON string).
+
+    Returns:
+        google.oauth2.service_account.Credentials or None
+    """
+    sa_json = os.getenv("GCP_SERVICE_ACCOUNT_JSON")
+
+    if not sa_json:
+        try:
+            import streamlit as st  # type: ignore
+            if "GCP_SERVICE_ACCOUNT_JSON" in st.secrets:
+                raw = st.secrets["GCP_SERVICE_ACCOUNT_JSON"]
+                if isinstance(raw, dict):
+                    info = raw
+                else:
+                    info = json.loads(str(raw))
+                return service_account.Credentials.from_service_account_info(info)
+        except Exception:
+            return None
+    else:
+        try:
+            info = json.loads(sa_json)
+            return service_account.Credentials.from_service_account_info(info)
+        except json.JSONDecodeError:
+            raise RuntimeError("GCP_SERVICE_ACCOUNT_JSON is not valid JSON")
+
+    return None
+
 
 # ====== Vertex / Embeddings helpers ======
 def init_vertex():
-    """
-    Initialize Vertex AI client with project + location.
-
-    We call this once before using any Gemini model.
-    """
+    """Initialize Vertex AI client (safe to call multiple times)."""
     if not GCP_PROJECT_ID:
         raise RuntimeError("GCP_PROJECT_ID is not set in environment (.env or secrets).")
 
-    # Try to load credentials from Streamlit secrets (for Streamlit Cloud)
-    creds = None
-    try:
-        import streamlit as st
-        sa_json = st.secrets.get("GCP_SERVICE_ACCOUNT_JSON")
-        if sa_json:
-            info = json.loads(sa_json)
-            creds = service_account.Credentials.from_service_account_info(info)
-    except Exception:
-        # If streamlit isn't available or secrets missing, we fall back
-        creds = None
+    creds = _load_service_account_credentials()
 
     if creds is not None:
-        vertexai.init(project=GCP_PROJECT_ID, location=GCP_LOCATION, credentials=creds)
+        vertexai.init(
+            project=GCP_PROJECT_ID,
+            location=GCP_LOCATION,
+            credentials=creds,
+        )
     else:
-        # Local dev: will use GOOGLE_APPLICATION_CREDENTIALS or other ADC
-        vertexai.init(project=GCP_PROJECT_ID, location=GCP_LOCATION)
+        vertexai.init(
+            project=GCP_PROJECT_ID,
+            location=GCP_LOCATION,
+        )
 
 
 def get_embedding_model() -> TextEmbeddingModel:

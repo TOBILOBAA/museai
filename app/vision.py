@@ -25,6 +25,40 @@ GCP_PROJECT_ID = os.getenv("GCP_PROJECT_ID")
 GCP_LOCATION = os.getenv("GCP_LOCATION", "us-central1")
 VISION_MODEL_NAME = os.getenv("VISION_MODEL_NAME", "gemini-2.0-flash-001")
 
+def _load_service_account_credentials():
+    """
+    Load service account credentials from either:
+    - Streamlit Cloud secrets["GCP_SERVICE_ACCOUNT_JSON"], or
+    - env var GCP_SERVICE_ACCOUNT_JSON (as JSON string).
+
+    Returns:
+        google.oauth2.service_account.Credentials or None
+    """
+    sa_json = os.getenv("GCP_SERVICE_ACCOUNT_JSON")
+
+    # Try Streamlit secrets if env var is not set
+    if not sa_json:
+        try:
+            import streamlit as st  # type: ignore
+            if "GCP_SERVICE_ACCOUNT_JSON" in st.secrets:
+                raw = st.secrets["GCP_SERVICE_ACCOUNT_JSON"]
+                # Streamlit secrets can give str or dict
+                if isinstance(raw, dict):
+                    info = raw
+                else:
+                    info = json.loads(str(raw))
+                return service_account.Credentials.from_service_account_info(info)
+        except Exception:
+            return None
+    else:
+        try:
+            info = json.loads(sa_json)
+            return service_account.Credentials.from_service_account_info(info)
+        except json.JSONDecodeError:
+            raise RuntimeError("GCP_SERVICE_ACCOUNT_JSON is not valid JSON")
+
+    return None
+
 
 # ===== Helper: resize + normalize image for Gemini Vision =====
 
@@ -73,34 +107,28 @@ def make_image_part(image: Path | str):
 
 # ====== Vertex init / model loader ======
 
-# add this import near the top if it's not there yet
-
 def init_vertex():
     """
     Initialize Vertex AI client with project + location.
-
-    We call this once before using any Gemini model.
+    Uses explicit service-account credentials when available.
     """
     if not GCP_PROJECT_ID:
         raise RuntimeError("GCP_PROJECT_ID is not set in environment (.env or secrets).")
 
-    # Try to load credentials from Streamlit secrets (for Streamlit Cloud)
-    creds = None
-    try:
-        import streamlit as st
-        sa_json = st.secrets.get("GCP_SERVICE_ACCOUNT_JSON")
-        if sa_json:
-            info = json.loads(sa_json)
-            creds = service_account.Credentials.from_service_account_info(info)
-    except Exception:
-        # If streamlit isn't available or secrets missing, we fall back
-        creds = None
+    creds = _load_service_account_credentials()
 
     if creds is not None:
-        vertexai.init(project=GCP_PROJECT_ID, location=GCP_LOCATION, credentials=creds)
+        vertexai.init(
+            project=GCP_PROJECT_ID,
+            location=GCP_LOCATION,
+            credentials=creds,
+        )
     else:
-        # Local dev: will use GOOGLE_APPLICATION_CREDENTIALS or other ADC
-        vertexai.init(project=GCP_PROJECT_ID, location=GCP_LOCATION)
+        # Local dev: GOOGLE_APPLICATION_CREDENTIALS or other ADC
+        vertexai.init(
+            project=GCP_PROJECT_ID,
+            location=GCP_LOCATION,
+        )
 
 
 def get_vision_model() -> GenerativeModel:

@@ -25,6 +25,37 @@ LANGUAGE_CODE_MAP = {
     "fr": "fr-FR",   # French
 }
 
+def _load_service_account_credentials():
+    """
+    Load service account credentials from either:
+    - Streamlit Cloud secrets["GCP_SERVICE_ACCOUNT_JSON"], or
+    - env var GCP_SERVICE_ACCOUNT_JSON (as JSON string).
+
+    Returns:
+        google.oauth2.service_account.Credentials or None
+    """
+    sa_json = os.getenv("GCP_SERVICE_ACCOUNT_JSON")
+
+    if not sa_json:
+        try:
+            import streamlit as st  # type: ignore
+            if "GCP_SERVICE_ACCOUNT_JSON" in st.secrets:
+                raw = st.secrets["GCP_SERVICE_ACCOUNT_JSON"]
+                if isinstance(raw, dict):
+                    info = raw
+                else:
+                    info = json.loads(str(raw))
+                return service_account.Credentials.from_service_account_info(info)
+        except Exception:
+            return None
+    else:
+        try:
+            info = json.loads(sa_json)
+            return service_account.Credentials.from_service_account_info(info)
+        except json.JSONDecodeError:
+            raise RuntimeError("GCP_SERVICE_ACCOUNT_JSON is not valid JSON")
+
+    return None
 
 def get_gcp_language_code(lang: LanguageCode) -> str:
     """
@@ -49,20 +80,12 @@ def _get_speech_client() -> speech.SpeechClient:
     if not GCP_PROJECT_ID:
         raise RuntimeError("GCP_PROJECT_ID is not set in environment (.env or secrets).")
 
-    creds = None
-    try:
-        import streamlit as st
-        sa_json = st.secrets.get("GCP_SERVICE_ACCOUNT_JSON")
-        if sa_json:
-            info = json.loads(sa_json)
-            creds = service_account.Credentials.from_service_account_info(info)
-    except Exception:
-        creds = None
+    creds = _load_service_account_credentials()
 
     if creds is not None:
         return speech.SpeechClient(credentials=creds)
     else:
-        # Local dev where GOOGLE_APPLICATION_CREDENTIALS is set
+        # Local dev: GOOGLE_APPLICATION_CREDENTIALS / gcloud auth
         return speech.SpeechClient()
 
 
