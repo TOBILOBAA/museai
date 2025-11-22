@@ -69,15 +69,14 @@ def get_gcp_language_code(lang: LanguageCode) -> str:
 
 
 # ===== Core STT functions =====
-def _get_speech_client() -> speech.SpeechClient:
+def _load_sa_credentials():
     """
-    Create a SpeechClient using explicit service account credentials if available.
-    Falls back to Application Default Credentials for local dev.
+    Shared helper for Speech: load SA info from
+    - st.secrets["GCP_SERVICE_ACCOUNT_JSON"]
+    - env GCP_SERVICE_ACCOUNT_JSON
+    - file GOOGLE_APPLICATION_CREDENTIALS
     """
-    if not GCP_PROJECT_ID:
-        raise RuntimeError("GCP_PROJECT_ID is not set in environment (.env or secrets).")
-
-    creds = None
+    info = None
 
     # 1) Streamlit secrets
     try:
@@ -88,28 +87,49 @@ def _get_speech_client() -> speech.SpeechClient:
                 info = sa_value
             else:
                 info = json.loads(sa_value)
-            creds = service_account.Credentials.from_service_account_info(info)
-            print("[voice._get_speech_client] Using service account from st.secrets")
+            print("[voice._load_sa_credentials] Using SA from st.secrets")
     except Exception as e:
-        print(f"[voice._get_speech_client] Could not load SA from st.secrets: {e}")
+        print(f"[voice._load_sa_credentials] Could not read st.secrets: {e}")
 
     # 2) Env var
-    if creds is None:
+    if info is None:
         sa_env = os.getenv("GCP_SERVICE_ACCOUNT_JSON")
         if sa_env:
             try:
                 info = json.loads(sa_env)
-                creds = service_account.Credentials.from_service_account_info(info)
-                print("[voice._get_speech_client] Using service account from env GCP_SERVICE_ACCOUNT_JSON")
+                print("[voice._load_sa_credentials] Using SA from env GCP_SERVICE_ACCOUNT_JSON")
             except Exception as e:
-                print(f"[voice._get_speech_client] Failed to parse GCP_SERVICE_ACCOUNT_JSON env: {e}")
+                print(f"[voice._load_sa_credentials] Failed to parse env GCP_SERVICE_ACCOUNT_JSON: {e}")
 
-    # 3) Fallback
-    if creds is None:
-        print("[voice._get_speech_client] No SA creds found, using default application credentials.")
-        return speech.SpeechClient()
-    else:
-        return speech.SpeechClient(credentials=creds)
+    # 3) Local file
+    if info is None:
+        sa_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+        if sa_path and Path(sa_path).exists():
+            try:
+                info = json.loads(Path(sa_path).read_text())
+                print(f"[voice._load_sa_credentials] Using SA from file {sa_path}")
+            except Exception as e:
+                print(f"[voice._load_sa_credentials] Failed to read GOOGLE_APPLICATION_CREDENTIALS file: {e}")
+
+    if info is None:
+        raise RuntimeError(
+            "No service account JSON found. "
+            "Set GCP_SERVICE_ACCOUNT_JSON (secret or env) or GOOGLE_APPLICATION_CREDENTIALS."
+        )
+
+    return service_account.Credentials.from_service_account_info(info)
+
+
+def _get_speech_client() -> speech.SpeechClient:
+    """
+    Create a SpeechClient using explicit service account credentials.
+    NO fallback to metadata-based default creds.
+    """
+    if not GCP_PROJECT_ID:
+        raise RuntimeError("GCP_PROJECT_ID is not set in environment (.env or secrets).")
+
+    creds = _load_sa_credentials()
+    return speech.SpeechClient(credentials=creds)
 
 def _recognize_with_multilang(
     audio_bytes: bytes,

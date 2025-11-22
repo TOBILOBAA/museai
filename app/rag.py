@@ -63,16 +63,11 @@ def _load_service_account_credentials():
 
 
 # ====== Vertex / Embeddings helpers ======
-def init_vertex():
+def _load_sa_credentials():
     """
-    Initialize Vertex AI client with project + location.
-
-    We call this once before using any Gemini model.
+    Same as in vision.py but local to this file.
     """
-    if not GCP_PROJECT_ID:
-        raise RuntimeError("GCP_PROJECT_ID is not set in environment (.env or secrets).")
-
-    creds = None
+    info = None
 
     # 1) Streamlit secrets
     try:
@@ -83,32 +78,53 @@ def init_vertex():
                 info = sa_value
             else:
                 info = json.loads(sa_value)
-            creds = service_account.Credentials.from_service_account_info(info)
-            print("[rag.init_vertex] Using service account from st.secrets")
+            print("[rag._load_sa_credentials] Using SA from st.secrets")
     except Exception as e:
-        print(f"[rag.init_vertex] Could not load SA from st.secrets: {e}")
+        print(f"[rag._load_sa_credentials] Could not read st.secrets: {e}")
 
     # 2) Env var
-    if creds is None:
+    if info is None:
         sa_env = os.getenv("GCP_SERVICE_ACCOUNT_JSON")
         if sa_env:
             try:
                 info = json.loads(sa_env)
-                creds = service_account.Credentials.from_service_account_info(info)
-                print("[rag.init_vertex] Using service account from env GCP_SERVICE_ACCOUNT_JSON")
+                print("[rag._load_sa_credentials] Using SA from env GCP_SERVICE_ACCOUNT_JSON")
             except Exception as e:
-                print(f"[rag.init_vertex] Failed to parse GCP_SERVICE_ACCOUNT_JSON env: {e}")
+                print(f"[rag._load_sa_credentials] Failed to parse env GCP_SERVICE_ACCOUNT_JSON: {e}")
 
-    # 3) Fallback
-    if creds is None:
-        print("[rag.init_vertex] No SA creds found, falling back to application default.")
-        vertexai.init(project=GCP_PROJECT_ID, location=GCP_LOCATION)
-    else:
-        vertexai.init(
-            project=GCP_PROJECT_ID,
-            location=GCP_LOCATION,
-            credentials=creds,
+    # 3) Local file
+    if info is None:
+        sa_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+        if sa_path and Path(sa_path).exists():
+            try:
+                info = json.loads(Path(sa_path).read_text())
+                print(f"[rag._load_sa_credentials] Using SA from file {sa_path}")
+            except Exception as e:
+                print(f"[rag._load_sa_credentials] Failed to read GOOGLE_APPLICATION_CREDENTIALS file: {e}")
+
+    if info is None:
+        raise RuntimeError(
+            "No service account JSON found. "
+            "Set GCP_SERVICE_ACCOUNT_JSON (secret or env) or GOOGLE_APPLICATION_CREDENTIALS."
         )
+
+    return service_account.Credentials.from_service_account_info(info)
+
+
+def init_vertex():
+    """
+    Initialize Vertex AI for embeddings using explicit SA creds.
+    """
+    if not GCP_PROJECT_ID:
+        raise RuntimeError("GCP_PROJECT_ID is not set in environment (.env or secrets).")
+
+    creds = _load_sa_credentials()
+
+    vertexai.init(
+        project=GCP_PROJECT_ID,
+        location=GCP_LOCATION,
+        credentials=creds,
+    )
 
 
 def get_embedding_model() -> TextEmbeddingModel:

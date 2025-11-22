@@ -107,18 +107,18 @@ def make_image_part(image: Path | str):
 
 # ====== Vertex init / model loader ======
 
-def init_vertex():
+def _load_sa_credentials():
     """
-    Initialize Vertex AI client with project + location.
+    Load service account credentials from (in order):
+    1) Streamlit secrets (for Streamlit Cloud)
+    2) Env var GCP_SERVICE_ACCOUNT_JSON
+    3) Local file pointed to by GOOGLE_APPLICATION_CREDENTIALS
 
-    We call this once before using any Gemini model.
+    If none are found, raise an error (do NOT fall back to GCE metadata).
     """
-    if not GCP_PROJECT_ID:
-        raise RuntimeError("GCP_PROJECT_ID is not set in environment (.env or secrets).")
+    info = None
 
-    creds = None
-
-    # 1) Try Streamlit secrets
+    # 1) Streamlit secrets
     try:
         import streamlit as st
         if "GCP_SERVICE_ACCOUNT_JSON" in st.secrets:
@@ -127,34 +127,53 @@ def init_vertex():
                 info = sa_value
             else:
                 info = json.loads(sa_value)
-            creds = service_account.Credentials.from_service_account_info(info)
-            print("[vision.init_vertex] Using service account from st.secrets")
+            print("[vision._load_sa_credentials] Using SA from st.secrets")
     except Exception as e:
-        print(f"[vision.init_vertex] Could not load SA from st.secrets: {e}")
+        print(f"[vision._load_sa_credentials] Could not read st.secrets: {e}")
 
-    # 2) If still nothing, try env var (Streamlit Cloud also exposes secrets as env)
-    if creds is None:
+    # 2) Env var
+    if info is None:
         sa_env = os.getenv("GCP_SERVICE_ACCOUNT_JSON")
         if sa_env:
             try:
                 info = json.loads(sa_env)
-                creds = service_account.Credentials.from_service_account_info(info)
-                print("[vision.init_vertex] Using service account from env GCP_SERVICE_ACCOUNT_JSON")
+                print("[vision._load_sa_credentials] Using SA from env GCP_SERVICE_ACCOUNT_JSON")
             except Exception as e:
-                print(f"[vision.init_vertex] Failed to parse GCP_SERVICE_ACCOUNT_JSON env: {e}")
+                print(f"[vision._load_sa_credentials] Failed to parse env GCP_SERVICE_ACCOUNT_JSON: {e}")
 
-    # 3) If we STILL don't have creds, don't silently fall back.
-    if creds is None:
-        # Local dev will probably have GOOGLE_APPLICATION_CREDENTIALS set,
-        # but for Streamlit Cloud we *must* use the SA JSON.
-        print("[vision.init_vertex] No SA creds found, falling back to application default.")
-        vertexai.init(project=GCP_PROJECT_ID, location=GCP_LOCATION)
-    else:
-        vertexai.init(
-            project=GCP_PROJECT_ID,
-            location=GCP_LOCATION,
-            credentials=creds,
+    # 3) Local file (for your laptop dev)
+    if info is None:
+        sa_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+        if sa_path and Path(sa_path).exists():
+            try:
+                info = json.loads(Path(sa_path).read_text())
+                print(f"[vision._load_sa_credentials] Using SA from file {sa_path}")
+            except Exception as e:
+                print(f"[vision._load_sa_credentials] Failed to read GOOGLE_APPLICATION_CREDENTIALS file: {e}")
+
+    if info is None:
+        raise RuntimeError(
+            "No service account JSON found. "
+            "Set GCP_SERVICE_ACCOUNT_JSON (secret or env) or GOOGLE_APPLICATION_CREDENTIALS."
         )
+
+    return service_account.Credentials.from_service_account_info(info)
+
+
+def init_vertex():
+    """
+    Initialize Vertex AI client with project + location using explicit SA creds.
+    """
+    if not GCP_PROJECT_ID:
+        raise RuntimeError("GCP_PROJECT_ID is not set in environment (.env or secrets).")
+
+    creds = _load_sa_credentials()
+
+    vertexai.init(
+        project=GCP_PROJECT_ID,
+        location=GCP_LOCATION,
+        credentials=creds,
+    )
 
 
 def get_vision_model() -> GenerativeModel:
