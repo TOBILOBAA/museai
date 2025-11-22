@@ -110,25 +110,45 @@ def make_image_part(image: Path | str):
 def init_vertex():
     """
     Initialize Vertex AI client with project + location.
-    Uses explicit service-account credentials when available.
+
+    We call this once before using any Gemini model.
     """
     if not GCP_PROJECT_ID:
         raise RuntimeError("GCP_PROJECT_ID is not set in environment (.env or secrets).")
 
-    creds = _load_service_account_credentials()
+    creds = None
+
+    # Try to load credentials from Streamlit secrets (for Streamlit Cloud)
+    try:
+        import streamlit as st
+
+        if "GCP_SERVICE_ACCOUNT_JSON" in st.secrets:
+            sa_value = st.secrets["GCP_SERVICE_ACCOUNT_JSON"]
+
+            # Streamlit may return a string (multiline JSON) or a dict
+            if isinstance(sa_value, dict):
+                info = sa_value
+            else:
+                info = json.loads(sa_value)
+
+            creds = service_account.Credentials.from_service_account_info(info)
+            print("[vision.init_vertex] Using service account from Streamlit secrets")
+    except Exception as e:
+        # On local dev, `streamlit` may not be installed – that's fine.
+        print(f"[vision.init_vertex] Could not load SA from secrets, will try ADC. Error: {e}")
+        creds = None
 
     if creds is not None:
+        # ✅ Streamlit Cloud path: explicit service account, no metadata server
         vertexai.init(
             project=GCP_PROJECT_ID,
             location=GCP_LOCATION,
             credentials=creds,
         )
     else:
-        # Local dev: GOOGLE_APPLICATION_CREDENTIALS or other ADC
-        vertexai.init(
-            project=GCP_PROJECT_ID,
-            location=GCP_LOCATION,
-        )
+        # ✅ Local dev path: uses GOOGLE_APPLICATION_CREDENTIALS or gcloud user creds
+        print("[vision.init_vertex] Using default application credentials (local dev).")
+        vertexai.init(project=GCP_PROJECT_ID, location=GCP_LOCATION)
 
 
 def get_vision_model() -> GenerativeModel:

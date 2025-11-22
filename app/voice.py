@@ -80,12 +80,30 @@ def _get_speech_client() -> speech.SpeechClient:
     if not GCP_PROJECT_ID:
         raise RuntimeError("GCP_PROJECT_ID is not set in environment (.env or secrets).")
 
-    creds = _load_service_account_credentials()
+    creds = None
+    try:
+        import streamlit as st
+
+        if "GCP_SERVICE_ACCOUNT_JSON" in st.secrets:
+            sa_value = st.secrets["GCP_SERVICE_ACCOUNT_JSON"]
+
+            if isinstance(sa_value, dict):
+                info = sa_value
+            else:
+                info = json.loads(sa_value)
+
+            creds = service_account.Credentials.from_service_account_info(info)
+            print("[voice._get_speech_client] Using service account from Streamlit secrets")
+    except Exception as e:
+        print(f"[voice._get_speech_client] Could not load SA from secrets, will try ADC. Error: {e}")
+        creds = None
 
     if creds is not None:
+        # ✅ Streamlit Cloud path
         return speech.SpeechClient(credentials=creds)
     else:
-        # Local dev: GOOGLE_APPLICATION_CREDENTIALS / gcloud auth
+        # ✅ Local dev path (GOOGLE_APPLICATION_CREDENTIALS, gcloud, etc.)
+        print("[voice._get_speech_client] Using default application credentials (local dev).")
         return speech.SpeechClient()
 
 
