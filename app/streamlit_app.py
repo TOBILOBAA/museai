@@ -335,6 +335,14 @@ def main():
 
     init_session_state()
 
+    # 🔴 DEBUG: see what secrets are available on Streamlit Cloud
+    st.sidebar.write("DEBUG secrets keys:", list(st.secrets.keys()))
+    st.sidebar.write(
+        "Has GCP_SERVICE_ACCOUNT_JSON:",
+        "GCP_SERVICE_ACCOUNT_JSON" in st.secrets,
+    )
+
+
     # Splash vs main
     if not st.session_state.started:
         show_splash_screen()
@@ -353,6 +361,8 @@ def main():
     handle_camera_step()
     st.markdown("---")
     render_conversation_area()
+    
+    st.sidebar.write("SECRETS:", list(st.secrets.keys()))
 
 
 if __name__ == "__main__":

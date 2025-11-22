@@ -2,17 +2,27 @@ from dotenv import load_dotenv
 load_dotenv()
 
 import os
+<<<<<<< HEAD
 import json
 from pathlib import Path
 from typing import List, Dict
 
 
+=======
+>>>>>>> 0823dc0b (debuggin)
 import faiss
+import json
 import numpy as np
 import pandas as pd
 import vertexai
+import streamlit as st
+
+from pathlib import Path
+from typing import List, Dict
+from google.oauth2 import service_account
 from vertexai.language_models import TextEmbeddingModel
 from google.oauth2 import service_account
+
 
 # ====== Config ======
 BASE_DIR = Path(__file__).resolve().parent.parent   # MuseAI/

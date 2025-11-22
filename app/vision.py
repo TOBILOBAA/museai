@@ -3,6 +3,7 @@ load_dotenv()
 
 import os
 import json
+import streamlit as st
 from pathlib import Path
 from typing import Dict, Any, List
 
@@ -109,6 +110,7 @@ def make_image_part(image: Path | str):
 
 def _load_sa_credentials():
     """
+<<<<<<< HEAD
     Load service account credentials in this order:
     1) Streamlit Cloud secrets["GCP_SERVICE_ACCOUNT_JSON"]
     2) Env var GCP_SERVICE_ACCOUNT_JSON
@@ -160,8 +162,55 @@ def init_vertex():
     """
     Initialize Vertex AI client with project + location, ALWAYS using explicit
     service account credentials (no metadata server fallback).
+=======
+    Load GCP service account credentials safely from Streamlit secrets
+    OR environment variables.
+    Returns:
+        google.oauth2.service_account.Credentials | None
     """
+
+    # 1) Streamlit Cloud secrets
+    if "GCP_SERVICE_ACCOUNT_JSON" in st.secrets:
+        raw = st.secrets["GCP_SERVICE_ACCOUNT_JSON"]
+
+        # If saved as a dict → use directly
+        if isinstance(raw, dict):
+            return service_account.Credentials.from_service_account_info(raw)
+
+        # If saved as a string → parse JSON
+        try:
+            info = json.loads(raw)
+            return service_account.Credentials.from_service_account_info(info)
+        except Exception:
+            pass  # fall through
+
+    # 2) Env var fallback
+    env_json = os.getenv("GCP_SERVICE_ACCOUNT_JSON")
+    if env_json:
+        try:
+            info = json.loads(env_json)
+            return service_account.Credentials.from_service_account_info(info)
+        except Exception:
+            pass
+
+    # 3) Local ADC for development
+    adc = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+    if adc and Path(adc).exists():
+        try:
+            return service_account.Credentials.from_service_account_file(adc)
+        except Exception:
+            pass
+
+    return None
+
+def init_vertex():
+    """
+    Initialize Vertex AI with correct service account.
+>>>>>>> 0823dc0b (debuggin)
+    """
+
     if not GCP_PROJECT_ID:
+<<<<<<< HEAD
         raise RuntimeError("GCP_PROJECT_ID is not set in environment (.env or secrets).")
 
     creds = _load_sa_credentials()
@@ -170,6 +219,24 @@ def init_vertex():
         location=GCP_LOCATION,
         credentials=creds,
     )
+=======
+        raise RuntimeError("GCP_PROJECT_ID is missing.")
+
+    creds = _load_sa_credentials()
+
+    if creds:
+        vertexai.init(
+            project=GCP_PROJECT_ID,
+            location=GCP_LOCATION,
+            credentials=creds,
+        )
+    else:
+        # Fallback for local dev
+        vertexai.init(
+            project=GCP_PROJECT_ID,
+            location=GCP_LOCATION,
+        )
+>>>>>>> 0823dc0b (debuggin)
 
 
 def get_vision_model() -> GenerativeModel:
