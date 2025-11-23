@@ -31,43 +31,7 @@ GCP_PROJECT_ID = os.getenv("GCP_PROJECT_ID")
 GCP_LOCATION = os.getenv("GCP_LOCATION", "us-central1")
 VISION_MODEL_NAME = os.getenv("VISION_MODEL_NAME", "gemini-2.0-flash-001")
 
-def _load_service_account_credentials():
-    """
-    Load service account credentials from either:
-    - Streamlit Cloud secrets["GCP_SERVICE_ACCOUNT_JSON"], or
-    - env var GCP_SERVICE_ACCOUNT_JSON (as JSON string).
-
-    Returns:
-        google.oauth2.service_account.Credentials or None
-    """
-    sa_json = os.getenv("GCP_SERVICE_ACCOUNT_JSON")
-
-    # Try Streamlit secrets if env var is not set
-    if not sa_json:
-        try:
-            import streamlit as st  # type: ignore
-            if "GCP_SERVICE_ACCOUNT_JSON" in st.secrets:
-                raw = st.secrets["GCP_SERVICE_ACCOUNT_JSON"]
-                # Streamlit secrets can give str or dict
-                if isinstance(raw, dict):
-                    info = raw
-                else:
-                    info = json.loads(str(raw))
-                return service_account.Credentials.from_service_account_info(info)
-        except Exception:
-            return None
-    else:
-        try:
-            info = json.loads(sa_json)
-            return service_account.Credentials.from_service_account_info(info)
-        except json.JSONDecodeError:
-            raise RuntimeError("GCP_SERVICE_ACCOUNT_JSON is not valid JSON")
-
-    return None
-
-
 # ===== Helper: resize + normalize image for Gemini Vision =====
-
 def prepare_image_bytes(path: Path, max_side: int = 1024) -> bytes:
     """
     Open the image, downscale it so the longest side <= max_side,
@@ -113,53 +77,6 @@ def make_image_part(image: Path | str):
 
 # ====== Vertex init / model loader ======
 
-def _load_sa_credentials():
-    """
-    Load service account credentials in this order:
-    1) Streamlit Cloud secrets["GCP_SERVICE_ACCOUNT_JSON"]
-    2) Env var GCP_SERVICE_ACCOUNT_JSON
-    3) File pointed to by GOOGLE_APPLICATION_CREDENTIALS
-
-    If nothing works, raise so we don't silently fall back to metadata server.
-    """
-    info = None
-
-    # 1) Streamlit secrets (Streamlit Cloud)
-    try:
-        import streamlit as st
-        sa_json = st.secrets.get("GCP_SERVICE_ACCOUNT_JSON")
-        if sa_json:
-            # secrets can be parsed as dict or string
-            if isinstance(sa_json, dict):
-                info = sa_json
-            else:
-                info = json.loads(sa_json)
-            return service_account.Credentials.from_service_account_info(info)
-    except Exception as e:
-        print("[_load_sa_credentials] failed reading st.secrets:", e)
-
-    # 2) Environment variable (local dev or other hosts)
-    sa_env = os.getenv("GCP_SERVICE_ACCOUNT_JSON")
-    if sa_env:
-        try:
-            info = json.loads(sa_env)
-            return service_account.Credentials.from_service_account_info(info)
-        except Exception as e:
-            print("[_load_sa_credentials] failed parsing GCP_SERVICE_ACCOUNT_JSON env:", e)
-
-    # 3) Local JSON file (GOOGLE_APPLICATION_CREDENTIALS)
-    sa_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
-    if sa_path and Path(sa_path).exists():
-        try:
-            return service_account.Credentials.from_service_account_file(sa_path)
-        except Exception as e:
-            print("[_load_sa_credentials] failed loading GOOGLE_APPLICATION_CREDENTIALS file:", e)
-
-    # If we get here, we really have no usable credentials
-    raise RuntimeError(
-        "No service account JSON found. "
-        "Set GCP_SERVICE_ACCOUNT_JSON (Streamlit secret or env) or GOOGLE_APPLICATION_CREDENTIALS."
-    )
 
 def _get_gcp_config() -> tuple[str, str]:
     """
@@ -180,31 +97,54 @@ def _get_gcp_config() -> tuple[str, str]:
         )
     return project, location
 
-
 def _load_sa_credentials():
     """
     Load Google Cloud service-account credentials from either:
     - GOOGLE_APPLICATION_CREDENTIALS file (local dev), OR
     - GCP_SERVICE_ACCOUNT_JSON in Streamlit secrets, OR
     - GCP_SERVICE_ACCOUNT_JSON in env.
+
+    Raises RuntimeError with a clear message if JSON is invalid.
     """
-    # Local JSON file
+    # 1) Local JSON file (for your laptop dev)
     path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
     if path and Path(path).exists():
         return service_account.Credentials.from_service_account_file(path)
 
-    # Streamlit Cloud: JSON string in secrets
+    # 2) Streamlit Cloud: value in st.secrets
     if st is not None and "GCP_SERVICE_ACCOUNT_JSON" in st.secrets:
-        info = json.loads(st.secrets["GCP_SERVICE_ACCOUNT_JSON"])
+        raw = st.secrets["GCP_SERVICE_ACCOUNT_JSON"]
+
+        if isinstance(raw, dict):
+            info = raw
+        else:
+            try:
+                info = json.loads(raw)
+            except json.JSONDecodeError as e:
+                raise RuntimeError(
+                    "GCP_SERVICE_ACCOUNT_JSON in Streamlit secrets is not valid JSON. "
+                    "Inside the triple quotes it must be a plain JSON object "
+                    "starting with '{' and ending with '}'."
+                ) from e
+
         return service_account.Credentials.from_service_account_info(info)
 
-    # Optional: JSON in env
+    # 3) Environment variable (for other hosts)
     sa_json = os.getenv("GCP_SERVICE_ACCOUNT_JSON")
     if sa_json:
-        info = json.loads(sa_json)
+        try:
+            info = json.loads(sa_json)
+        except json.JSONDecodeError as e:
+            raise RuntimeError(
+                "GCP_SERVICE_ACCOUNT_JSON env var is not valid JSON."
+            ) from e
         return service_account.Credentials.from_service_account_info(info)
 
-    return None
+    # If nothing worked:
+    raise RuntimeError(
+        "No service account JSON found. "
+        "Set GCP_SERVICE_ACCOUNT_JSON (Streamlit secret or env) or GOOGLE_APPLICATION_CREDENTIALS."
+    )
 
 def init_vertex():
     """
