@@ -50,6 +50,8 @@ data/tmp_images/
 # Ignore everything inside /data EXCEPT the artifact metadata file.
 data/*
 !data/artifacts.csv
+!data/artifacts_index.faiss
+!data/artifacts_metadata.parquet
 
 ##############################################
 # CSV (global ignore but allow artifacts.csv)
