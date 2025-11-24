@@ -40,105 +40,25 @@ GCP_PROJECT_ID = os.getenv("GCP_PROJECT_ID")
 GCP_LOCATION = os.getenv("GCP_LOCATION", "us-central1")
 EMBEDDING_MODEL_NAME = "text-embedding-004"   # Gemini embedding model
 
-def _load_service_account_credentials():
-    """
-    Load service account credentials from either:
-    - Streamlit Cloud secrets["GCP_SERVICE_ACCOUNT_JSON"], or
-    - env var GCP_SERVICE_ACCOUNT_JSON (as JSON string).
-
-    Returns:
-        google.oauth2.service_account.Credentials or None
-    """
-    sa_json = os.getenv("GCP_SERVICE_ACCOUNT_JSON")
-
-    if not sa_json:
-        try:
-            import streamlit as st  # type: ignore
-            if "GCP_SERVICE_ACCOUNT_JSON" in st.secrets:
-                raw = st.secrets["GCP_SERVICE_ACCOUNT_JSON"]
-                if isinstance(raw, dict):
-                    info = raw
-                else:
-                    info = json.loads(str(raw))
-                return service_account.Credentials.from_service_account_info(info)
-        except Exception:
-            return None
-    else:
-        try:
-            info = json.loads(sa_json)
-            return service_account.Credentials.from_service_account_info(info)
-        except json.JSONDecodeError:
-            raise RuntimeError("GCP_SERVICE_ACCOUNT_JSON is not valid JSON")
-
-    return None
-
 
 # ====== Vertex / Embeddings helpers ======
-def _load_sa_credentials():
-    """
-    Same as in vision.py but local to this file.
-    """
-    info = None
-
-    # 1) Streamlit secrets
-    try:
-        import streamlit as st
-        if "GCP_SERVICE_ACCOUNT_JSON" in st.secrets:
-            sa_value = st.secrets["GCP_SERVICE_ACCOUNT_JSON"]
-            if isinstance(sa_value, dict):
-                info = sa_value
-            else:
-                info = json.loads(sa_value)
-            print("[rag._load_sa_credentials] Using SA from st.secrets")
-    except Exception as e:
-        print(f"[rag._load_sa_credentials] Could not read st.secrets: {e}")
-
-    # 2) Env var
-    if info is None:
-        sa_env = os.getenv("GCP_SERVICE_ACCOUNT_JSON")
-        if sa_env:
-            try:
-                info = json.loads(sa_env)
-                print("[rag._load_sa_credentials] Using SA from env GCP_SERVICE_ACCOUNT_JSON")
-            except Exception as e:
-                print(f"[rag._load_sa_credentials] Failed to parse env GCP_SERVICE_ACCOUNT_JSON: {e}")
-
-    # 3) Local file
-    if info is None:
-        sa_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
-        if sa_path and Path(sa_path).exists():
-            try:
-                info = json.loads(Path(sa_path).read_text())
-                print(f"[rag._load_sa_credentials] Using SA from file {sa_path}")
-            except Exception as e:
-                print(f"[rag._load_sa_credentials] Failed to read GOOGLE_APPLICATION_CREDENTIALS file: {e}")
-
-    if info is None:
-        raise RuntimeError(
-            "No service account JSON found. "
-            "Set GCP_SERVICE_ACCOUNT_JSON (secret or env) or GOOGLE_APPLICATION_CREDENTIALS."
-        )
-
-    return service_account.Credentials.from_service_account_info(info)
-
 
 def _get_gcp_config() -> tuple[str, str]:
     """
-    Get project + location from env OR Streamlit secrets.
+    Get project + location from environment variables only.
+
+    This is used for the local CLI tool (rag.py) to build the FAISS index,
+    and by the app in production. It does NOT rely on st.secrets.
     """
     project = os.getenv("GCP_PROJECT_ID")
     location = os.getenv("GCP_LOCATION") or "us-central1"
 
-    if st is not None:
-        if not project and "GCP_PROJECT_ID" in st.secrets:
-            project = st.secrets["GCP_PROJECT_ID"]
-        if "GCP_LOCATION" in st.secrets:
-            location = st.secrets["GCP_LOCATION"]
-
     if not project:
         raise RuntimeError(
-            "GCP_PROJECT_ID is not set in environment variables or Streamlit secrets."
+            "GCP_PROJECT_ID is not set in environment variables. "
+            "Make sure your .env has GCP_PROJECT_ID and you've loaded it."
         )
+
     return project, location
 
 
@@ -146,26 +66,27 @@ def _load_sa_credentials():
     """
     Load Google Cloud service-account credentials from either:
     - GOOGLE_APPLICATION_CREDENTIALS file (local dev), OR
-    - GCP_SERVICE_ACCOUNT_JSON in Streamlit secrets, OR
     - GCP_SERVICE_ACCOUNT_JSON in env.
+
+    No use of st.secrets here so it works fine in plain python.
+    Streamlit Cloud will also expose secrets as env vars, so this works there too.
     """
-    # Local JSON file
+    # 1) Local JSON file (for laptop dev)
     path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
     if path and Path(path).exists():
         return service_account.Credentials.from_service_account_file(path)
 
-    # Streamlit Cloud: JSON string in secrets
-    if st is not None and "GCP_SERVICE_ACCOUNT_JSON" in st.secrets:
-        info = json.loads(st.secrets["GCP_SERVICE_ACCOUNT_JSON"])
-        return service_account.Credentials.from_service_account_info(info)
-
-    # Optional: JSON in env
+    # 2) Environment variable (for all hosts, including Streamlit Cloud)
     sa_json = os.getenv("GCP_SERVICE_ACCOUNT_JSON")
     if sa_json:
         info = json.loads(sa_json)
         return service_account.Credentials.from_service_account_info(info)
 
-    return None
+    raise RuntimeError(
+        "No service account JSON found. "
+        "Set GCP_SERVICE_ACCOUNT_JSON (env) or GOOGLE_APPLICATION_CREDENTIALS."
+    )
+
 
 def init_vertex():
     """
