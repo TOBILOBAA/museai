@@ -59,4 +59,12 @@ data/*
 # *.csv
 !data/artifacts.csv
 
-museai_ui_prototype.py/
+##############################################
+# Ignore some app files 
+##############################################
+app/*  
+!app/voice.py
+!app/vision.py
+!app/rag.py
+!app/reasoning.py
+!app/streamlit_app.py
