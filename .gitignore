@@ -60,7 +60,7 @@ data/*
 !data/artifacts.csv
 
 ##############################################
-# Ignore some app files 
+# Ignore everything in app Except...
 ##############################################
 app/*  
 !app/voice.py
