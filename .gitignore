@@ -60,11 +60,14 @@ data/*
 !data/artifacts.csv
 
 ##############################################
-# Ignore everything in app Except...
+# Ignore these files in apP
 ##############################################
-app/*  
-!app/voice.py
-!app/vision.py
-!app/rag.py
-!app/reasoning.py
-!app/streamlit_app.py
+
+# Ignore test scripts inside app/
+# app/test_*.py
+
+app/test_reasoning.py
+app/test_full_pipeline.py
+app/test_tts.py
+app/museai_ui_prototype.py
+
