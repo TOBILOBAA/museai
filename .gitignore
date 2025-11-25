@@ -59,15 +59,16 @@ data/*
 # *.csv
 !data/artifacts.csv
 
-##############################################
-# Ignore these files in apP
-##############################################
-
 # Ignore test scripts inside app/
-# app/test_*.py
+app/test_*.py
 
+# Ignore specific test files (if naming differs)
 app/test_reasoning.py
 app/test_full_pipeline.py
 app/test_tts.py
+
+# Ignore prototype UI
 app/museai_ui_prototype.py
 
+# Cache
+app/__pycache__/
