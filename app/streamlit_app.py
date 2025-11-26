@@ -212,6 +212,18 @@ def apply_global_styles():
             font-weight: 600 !important;
             font-size: 0.95rem !important;
         }
+        
+        /* Make camera buttons always visible + dark themed */
+        [data-testid="stCameraInput"] button {
+            opacity: 1 !important;
+            visibility: visible !important;
+            background: #111318 !important;     /* dark button */
+            color: #ffffff !important;           /* white text */
+            border: 1px solid #2c2f3a !important;
+            border-radius: 10px !important;
+            padding: 0.5rem 1.4rem !important;
+            font-weight: 600 !important;
+        }
 
         /* ===== SIDEBAR – dark like main area & nice button ===== */
         [data-testid="stSidebar"] {
@@ -468,7 +480,7 @@ def handle_camera_step():
             st.session_state.artifact = vision_result
 
             # First assistant message after recognition
-            title = vision_result.get("title") or "this artifact"
+            title = vision_result.get("title") or "Unknown Artifact"
             opening_line = (
                 f"Great shot! I believe this is {title}. "
                 "I'm MuseAI, your museum guide. "
