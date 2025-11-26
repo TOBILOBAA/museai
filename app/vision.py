@@ -75,8 +75,6 @@ def make_image_part(image: Path | str):
 
 
 # ====== Vertex init / model loader ======
-
-
 def _get_gcp_config() -> tuple[str, str]:
     """
     Get project + location from env OR Streamlit secrets.
@@ -168,7 +166,6 @@ def get_vision_model() -> GenerativeModel:
 
 
 # ====== Load artifact metadata ======
-
 def load_artifacts() -> pd.DataFrame:
     """
     Load the artifacts table created in artifacts.csv.
@@ -222,7 +219,6 @@ def build_artifact_prompt(df: pd.DataFrame) -> str:
 
 
 # ====== Main classification function ======
-
 def classify_artifact_from_image(image_path: Path | str) -> Dict[str, Any]:
     """
     Given an image path (photo taken in museum), ask Gemini Vision to decide
