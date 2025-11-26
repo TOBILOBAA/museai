@@ -28,48 +28,6 @@ LANGUAGE_CODE_MAP = {
     "fr": "fr-FR",   # French
 }
 
-def _load_service_account_credentials():
-    """
-    Load service account credentials from either:
-    - Streamlit Cloud secrets["GCP_SERVICE_ACCOUNT_JSON"], or
-    - env var GCP_SERVICE_ACCOUNT_JSON (as JSON string).
-
-    Returns:
-        google.oauth2.service_account.Credentials or None
-    """
-    sa_json = os.getenv("GCP_SERVICE_ACCOUNT_JSON")
-
-    if not sa_json:
-        try:
-            import streamlit as st  # type: ignore
-            if "GCP_SERVICE_ACCOUNT_JSON" in st.secrets:
-                raw = st.secrets["GCP_SERVICE_ACCOUNT_JSON"]
-                if isinstance(raw, dict):
-                    info = raw
-                else:
-                    info = json.loads(str(raw))
-                return service_account.Credentials.from_service_account_info(info)
-        except Exception:
-            return None
-    else:
-        try:
-            info = json.loads(sa_json)
-            return service_account.Credentials.from_service_account_info(info)
-        except json.JSONDecodeError:
-            raise RuntimeError("GCP_SERVICE_ACCOUNT_JSON is not valid JSON")
-
-    return None
-
-def get_gcp_language_code(lang: LanguageCode) -> str:
-    """
-    Map our short app language codes ('en', 'he', 'fr')
-    to Google Cloud Speech language codes.
-    """
-    try:
-        return LANGUAGE_CODE_MAP[lang]
-    except KeyError:
-        raise ValueError(f"Unsupported language: {lang}")
-
 
 # ===== Core STT functions =====
 def _load_sa_credentials():
@@ -81,9 +39,8 @@ def _load_sa_credentials():
     """
     info = None
 
-    # 1) Streamlit secrets
+    # Streamlit secrets
     try:
-        import streamlit as st
         if "GCP_SERVICE_ACCOUNT_JSON" in st.secrets:
             sa_value = st.secrets["GCP_SERVICE_ACCOUNT_JSON"]
             if isinstance(sa_value, dict):
@@ -94,7 +51,7 @@ def _load_sa_credentials():
     except Exception as e:
         print(f"[voice._load_sa_credentials] Could not read st.secrets: {e}")
 
-    # 2) Env var
+    # Env var
     if info is None:
         sa_env = os.getenv("GCP_SERVICE_ACCOUNT_JSON")
         if sa_env:
@@ -104,7 +61,7 @@ def _load_sa_credentials():
             except Exception as e:
                 print(f"[voice._load_sa_credentials] Failed to parse env GCP_SERVICE_ACCOUNT_JSON: {e}")
 
-    # 3) Local file
+    # Local file
     if info is None:
         sa_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
         if sa_path and Path(sa_path).exists():
@@ -250,8 +207,25 @@ def transcribe_audio_file(
     return transcribe_audio_bytes(audio_bytes, lang=lang, sample_rate_hz=sample_rate_hz)
 
 
-# ===== Manual test (Task 4 verification) =====
 
+
+
+# ===== Manual Test (Speech-to-Text Verification) =====
+# Run this test to confirm that the STT pipeline correctly:
+#   1. Loads Google Cloud Speech service-account credentials,
+#   2. Accepts audio files as input,
+#   3. Returns a clean transcript,
+#   4. Detects spoken language (English/French/Hebrew),
+#   5. Works outside the Streamlit app (CLI mode).
+#
+# Usage:
+#   From the project root, run:
+#
+#       (venv) python app/voice.py data/audio/sample_en.wav
+#
+# Replace 'sample_en.wav' with any small WAV file you want to test.
+# If no file is provided, the default path below is used.
+# ==============================================================
 if __name__ == "__main__":
     """
     Quick manual test for the STT pipeline.
