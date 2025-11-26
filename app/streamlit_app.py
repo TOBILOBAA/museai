@@ -216,7 +216,7 @@ def apply_global_styles():
         /* ===== CAMERA AREA DARK MODE FIX ===== */
         [data-testid="stCameraInput"] {
             background-color: #111318 !important;    /* dark background */
-            border-radius: 12px !important;
+            border-radius: 0px 0px 12px 12px !important;
             border: 1px solid #2c2f3a !important;
             padding: 1rem !important;
         }
@@ -228,9 +228,9 @@ def apply_global_styles():
 
         /* Permission message ("This app would like to use your camera.") */
         [data-testid="stCameraInput"] label {
-            color: #ffffff !important;               /* make visible */
+            color: #ff4444 !important;               /* make visible */
             font-size: 0.9rem !important;
-            opacity: 0.9 !important;
+            opacity: 1 !important;
         }
 
         /* The link "Learn how to allow access" */
