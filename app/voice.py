@@ -1,5 +1,6 @@
 import os
 import json
+
 from pathlib import Path
 from typing import Literal, Tuple
 from google.cloud import speech_v1p1beta1 as speech
@@ -225,30 +226,30 @@ def transcribe_audio_file(
 # Replace 'sample_en.wav' with any small WAV file you want to test.
 # If no file is provided, the default path below is used.
 # ==============================================================
-if __name__ == "__main__":
-    """
-    Quick manual test for the STT pipeline.
+# if __name__ == "__main__":
+#     """
+#     Quick manual test for the STT pipeline.
 
-    From project root, run:
+#     From project root, run:
 
-        (venv) python app/voice.py data/audio/sample_en.wav
+#         (venv) python app/voice.py data/audio/sample_en.wav
 
-    You’ll need to place a small WAV file at that path or change it below.
-    """
-    import sys
+#     You’ll need to place a small WAV file at that path or change it below.
+#     """
+#     import sys
 
-    if len(sys.argv) > 1:
-        audio_path = sys.argv[1]
-    else:
-        # Change this to whatever test file you create later
-        audio_path = "data/audio/sample_en.wav"
+#     if len(sys.argv) > 1:
+#         audio_path = sys.argv[1]
+#     else:
+#         # Change this to whatever test file you create later
+#         audio_path = "data/audio/sample_en.wav"
 
-    print(f"Transcribing file: {audio_path}")
+#     print(f"Transcribing file: {audio_path}")
 
-    try:
-        text = transcribe_audio_file(audio_path, lang="en")
-        print("\nTranscript:\n")
-        print(text or "[EMPTY TRANSCRIPT]")
-    except Exception as e:
-        print("\nError during transcription:")
-        print(e)
+#     try:
+#         text = transcribe_audio_file(audio_path, lang="en")
+#         print("\nTranscript:\n")
+#         print(text or "[EMPTY TRANSCRIPT]")
+#     except Exception as e:
+#         print("\nError during transcription:")
+#         print(e)

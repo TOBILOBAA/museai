@@ -305,12 +305,12 @@ def classify_artifact_from_image(image_path: Path | str) -> Dict[str, Any]:
 # This is ONLY for debugging / development:
 # The Streamlit app calls classify_artifact_from_image(...) internally.
 # ========================================================================
-if __name__ == "__main__":
-    if len(sys.argv) > 1:
-        test_image = Path(sys.argv[1])
-    else:
-        test_image = DATA_DIR / "images" / "lamp_ancient.jpg"
+# if __name__ == "__main__":
+#     if len(sys.argv) > 1:
+#         test_image = Path(sys.argv[1])
+#     else:
+#         test_image = DATA_DIR / "images" / "lamp_ancient.jpg"
 
-    print(f"Testing classification with image: {test_image}")
-    out = classify_artifact_from_image(test_image)
-    print(json.dumps(out, indent=2, ensure_ascii=False))
+#     print(f"Testing classification with image: {test_image}")
+#     out = classify_artifact_from_image(test_image)
+#     print(json.dumps(out, indent=2, ensure_ascii=False))

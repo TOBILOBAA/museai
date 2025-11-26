@@ -255,11 +255,11 @@ def build_context_for_artifact_id(artifact_id: int) -> str:
 # HOW TO RUN:
 #   python app/rag.py
 # ================================================================
-if __name__ == "__main__":
-    print("Building vector store from artifacts.csv …")
-    build_and_save_vectorstore()
-    print("\nTesting retrieval…")
-    test_query = "religious silver object used with the Torah"
-    ctx = build_context_for_query(test_query, k=2)
-    print("\nContext for test query:\n")
-    print(ctx)
+# if __name__ == "__main__":
+#     print("Building vector store from artifacts.csv …")
+#     build_and_save_vectorstore()
+#     print("\nTesting retrieval…")
+#     test_query = "religious silver object used with the Torah"
+#     ctx = build_context_for_query(test_query, k=2)
+#     print("\nContext for test query:\n")
+#     print(ctx)

@@ -1,5 +1,6 @@
 import os
 import vertexai
+
 from pathlib import Path
 from dotenv import load_dotenv
 from typing import Dict, Optional

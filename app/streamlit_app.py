@@ -1,20 +1,17 @@
-import io
 import os
-from pathlib import Path
-from typing import Literal
 import sys
+import streamlit as st
+
+from pathlib import Path
+from app.vision import classify_artifact_from_image
+from app.voice import transcribe_and_detect_language, LanguageCode
+from app.reasoning import museai_reason
+from app.tts import tts_generate_audio
 
 # --- make sure the project root is on sys.path (needed on Streamlit Cloud) ---
 ROOT_DIR = Path(__file__).resolve().parent.parent
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
-
-import streamlit as st
-
-from app.vision import classify_artifact_from_image
-from app.voice import transcribe_and_detect_language, LanguageCode
-from app.reasoning import museai_reason
-from app.tts import tts_generate_audio
 
 # ------------------------------------------------------------------------------------
 # Basic config
@@ -77,9 +74,8 @@ def get_lang_label(lang_code: STRINGS) -> str:
 
 
 # ------------------------------------------------------------------------------------
-# Global styles (from your new UI)
+# Global styles
 # ------------------------------------------------------------------------------------
-
 def apply_global_styles():
     st.markdown(
         """
@@ -113,7 +109,7 @@ def apply_global_styles():
             justify-content: center;
             padding: 0.25rem 0.9rem;
             border-radius: 999px;
-            background: #111318;           /* slightly lighter than bg */
+            background: #111318;           
             border: 1px solid #252834;
             font-weight: 600;
             letter-spacing: 0.18em;
@@ -169,11 +165,6 @@ def apply_global_styles():
             box-shadow: 0 6px 18px rgba(0,0,0,0.55);
         }
 
-        # /* Language select – shrink width a bit (top-right) */
-        # .lang-select-box .stSelectbox > div > div {
-        #     max-width: 170px;
-        # }
-
         /* TOP language select – dark mode */
         .lang-select-box .stSelectbox > div > div {
             max-width: 170px;
@@ -208,14 +199,14 @@ def apply_global_styles():
 
         /* Audio input label ("Tap to record your question") */
         [data-testid="stAudioInput"] label {
-            color: #ffffff !important;
+            color: #f7f7f7 !important;
             font-weight: 600 !important;
             font-size: 0.95rem !important;
         }
         
         /* ===== CAMERA AREA DARK MODE FIX ===== */
         [data-testid="stCameraInput"] {
-            background-color: #111318 !important;    /* dark background */
+            background-color: #111318 !important;   
             border-radius: 12px !important;
             border: 1px solid #2c2f3a !important;
             padding: 1rem !important;
@@ -226,26 +217,25 @@ def apply_global_styles():
             background-color: #111318 !important;
         }
 
-        /* Permission message ("This app would like to use your camera.") */
-        [data-testid="stCameraInput"] label {
-            color: #121212 !important;               /* make visible */
-            font-size: 0.9rem !important;
-            opacity: 1 !important;
-        }
+        # /* Permission message ("This app would like to use your camera.") */
+        # [data-testid="stCameraInput"] label {
+        #     color: #121212 !important;               /* make visible */
+        #     font-size: 0.9rem !important;
+        #     opacity: 1 !important;
+        # }
 
-        /* The link "Learn how to allow access" */
-        [data-testid="stCameraInput"] a {
-            color: #61a8ff !important;               /* light blue for contrast */
-            text-decoration: underline !important;
-        }
-
+        # /* The link "Learn how to allow access" */
+        # [data-testid="stCameraInput"] a {
+        #     color: #61a8ff !important;               /* light blue for contrast */
+        #     text-decoration: underline !important;
+        # }
 
         /* === Camera buttons: base + hover + active === */
         [data-testid="stCameraInput"] button {
             opacity: 1 !important;
             visibility: visible !important;
-            background: #111318 !important;          /* dark pill */
-            color: #ffffff !important;               /* white text */
+            background: #111318 !important;       
+            color: #ffffff !important;           
             border: 1px solid #2c2f3a !important;
             border-radius: 0px 0px 10px10px !important;
             padding: 0.5rem 1.4rem !important;
@@ -318,7 +308,6 @@ def apply_global_styles():
 # ------------------------------------------------------------------------------------
 # Session state helpers
 # ------------------------------------------------------------------------------------
-
 def init_session_state():
     if "started" not in st.session_state:
         st.session_state.started = False  # splash vs main UI
@@ -360,7 +349,6 @@ def reset_tour():
 # ------------------------------------------------------------------------------------
 # UI building blocks
 # ------------------------------------------------------------------------------------
-
 def render_top_bar():
     """
     Top strip with logo + language dropdown ONLY on splash screen.
@@ -405,7 +393,6 @@ def render_top_bar():
                 "<a class='logo-link' href='/'><div class='muse-logo-pill'>MUSEAI</div></a>",
                 unsafe_allow_html=True,
             )
-        # no col_lang, so no top-right dropdown on main page
 
 def show_splash_screen():
     """Splash screen before the main UI – using STRINGS for text."""
@@ -650,7 +637,6 @@ def render_conversation_area():
 # ------------------------------------------------------------------------------------
 # Main app
 # ------------------------------------------------------------------------------------
-
 def main():
     st.set_page_config(
         page_title="MuseAI – Multimodal Museum Companion",
@@ -687,3 +673,96 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+
+
+# # app/test_full_pipeline.py
+# """
+# End-to-end pipeline test for MuseAI (CLI only).
+
+# This script lets a developer verify that:
+# 1. Google Speech-to-Text (STT) is working.
+# 2. The reasoning layer (RAG + Gemini) is working.
+# 3. ElevenLabs Text-to-Speech (TTS) is working.
+# 4. Multilingual responses (EN / FR / HE) are generated correctly.
+
+# Run from the project root:
+
+#     (venv) python app/test_full_pipeline.py
+
+# Make sure you have:
+# - data/audio/sample_en.wav   → a small WAV test file
+# - .env and service account keys configured correctly.
+# """
+# # app/test_full_pipeline.py
+
+# from pathlib import Path
+
+# from app.voice import transcribe_audio_file
+# from app.reasoning import museai_reason
+# from app.tts import tts_generate_audio
+
+
+# def main():
+#     base_dir = Path(__file__).resolve().parent.parent
+
+#     # 1) Use your existing WAV recording
+#     audio_path = base_dir / "data" / "audio" / "sample_en.wav"
+#     print(f" Using audio file: {audio_path}")
+
+#     # 2) Speech-to-Text
+#     print("\n=== STEP 1: SPEECH-TO-TEXT (Google STT) ===")
+#     transcript = transcribe_audio_file(audio_path, lang="en", sample_rate_hz=48000)
+
+#     print("\nTranscript:\n")
+#     print(transcript or "[EMPTY TRANSCRIPT]")
+
+#     if not transcript.strip():
+#         print("\n Transcript is empty — stopping test.")
+#         return
+
+#     # For demo: assume the user is standing in front of artifact_id = 3 (Torah Crown)
+#     artifact_id = 3
+
+#     languages = [
+#         ("en", "English"),
+#         ("fr", "French"),
+#         ("he", "Hebrew"),
+#     ]
+
+#     for lang_code, lang_label in languages:
+#         print("\n" + "=" * 70)
+#         print(f"=== {lang_label.upper()} RESPONSE ===")
+#         print("=" * 70)
+
+#         # 3) RAG + LLM reasoning
+#         raw_answer = museai_reason(
+#             user_query=transcript,
+#             artifact_id=artifact_id,
+#             language=lang_code,
+#         )
+
+#         print("\n Raw LLM Answer:")
+#         print(raw_answer)
+
+#         # Handle both dict and plain string cases
+#         if isinstance(raw_answer, dict):
+#             answer_text = raw_answer.get("answer", "").strip()
+#         else:
+#             answer_text = str(raw_answer).strip()
+
+#         if not answer_text:
+#             print(" Empty answer_text, skipping TTS for this language.")
+#             continue
+
+#         print("\n Final text to speak:")
+#         print(answer_text)
+
+#         # 4) Text-to-Speech
+#         audio_out = tts_generate_audio(answer_text, language=lang_code)
+#         print(f"\n TTS saved to: {audio_out}")
+
+
+# if __name__ == "__main__":
+#     main()

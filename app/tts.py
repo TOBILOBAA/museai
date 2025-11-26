@@ -5,6 +5,7 @@ Handles multilingual text-to-speech using ElevenLabs v3 with a unified voice.
 
 import os
 import streamlit as st
+
 from pathlib import Path
 from dotenv import load_dotenv
 from elevenlabs import ElevenLabs, VoiceSettings
@@ -85,9 +86,9 @@ if __name__ == "__main__":
 #     - Save the resulting .mp3 files in: data/audio_output/
 
 # This is useful for confirming:
-#     ✔️ Your ElevenLabs API key is working
-#     ✔️ Your VOICE_ID_MULTI supports multilingual output
-#     ✔️ Audio files are being generated and saved correctly
+#     Your ElevenLabs API key is working
+#     Your VOICE_ID_MULTI supports multilingual output
+#     Audio files are being generated and saved correctly
 # """
 
 # # app/test_tts.py
