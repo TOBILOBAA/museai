@@ -1,28 +1,23 @@
-from dotenv import load_dotenv
-load_dotenv()
-
 import os
 import json
-from pathlib import Path
-from typing import List, Dict
-
-try:
-    import streamlit as st   # available on Streamlit Cloud
-except Exception:
-    st = None               # harmless fallback for local CLI tests
-
 import faiss
-import json
 import numpy as np
 import pandas as pd
 import vertexai
-# import streamlit as st
 
 from pathlib import Path
 from typing import List, Dict
 from google.oauth2 import service_account
 from vertexai.language_models import TextEmbeddingModel
 from google.oauth2 import service_account
+from dotenv import load_dotenv
+load_dotenv()
+
+try:
+    import streamlit as st   # available on Streamlit Cloud
+except Exception:
+    st = None               # harmless fallback for local CLI tests
+
 
 
 # ====== Config ======
@@ -38,7 +33,7 @@ METADATA_PARQUET_PATH = DATA_DIR / "artifacts_metadata.parquet"
 
 GCP_PROJECT_ID = os.getenv("GCP_PROJECT_ID")
 GCP_LOCATION = os.getenv("GCP_LOCATION", "us-central1")
-EMBEDDING_MODEL_NAME = "text-embedding-004"   # Gemini embedding model
+EMBEDDING_MODEL_NAME = "text-embedding-004"   # Vertex AI Text Embedding Model
 
 
 # ====== Vertex / Embeddings helpers ======
@@ -71,12 +66,12 @@ def _load_sa_credentials():
     No use of st.secrets here so it works fine in plain python.
     Streamlit Cloud will also expose secrets as env vars, so this works there too.
     """
-    # 1) Local JSON file (for laptop dev)
+    # Local JSON file (for laptop dev)
     path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
     if path and Path(path).exists():
         return service_account.Credentials.from_service_account_file(path)
 
-    # 2) Environment variable (for all hosts, including Streamlit Cloud)
+    # Environment variable (for all hosts, including Streamlit Cloud)
     sa_json = os.getenv("GCP_SERVICE_ACCOUNT_JSON")
     if sa_json:
         info = json.loads(sa_json)
