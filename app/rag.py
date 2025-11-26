@@ -6,11 +6,12 @@ import pandas as pd
 import vertexai
 
 from pathlib import Path
+from dotenv import load_dotenv
 from typing import List, Dict
 from google.oauth2 import service_account
 from vertexai.language_models import TextEmbeddingModel
-from dotenv import load_dotenv
-load_dotenv()
+
+
 
 try:
     import streamlit as st   # available on Streamlit Cloud

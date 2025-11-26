@@ -1,21 +1,19 @@
 import os
-from pathlib import Path
-from typing import Dict, Optional
-
-from dotenv import load_dotenv
 import vertexai
+from pathlib import Path
+from dotenv import load_dotenv
+from typing import Dict, Optional
 from vertexai.generative_models import GenerativeModel
-
 from app.rag import build_context_for_artifact_id, build_context_for_query
 
-# ===== Environment & Vertex config =====
 
+# ===== Environment & Vertex config =====
 BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR / ".env")
 
 GCP_PROJECT_ID = os.getenv("GCP_PROJECT_ID")
 GCP_LOCATION = os.getenv("GCP_LOCATION", "us-central1")
-LLM_MODEL_NAME = "gemini-2.0-flash-001"   # same model you used in test_vertex
+LLM_MODEL_NAME = "gemini-2.0-flash-001"   
 
 
 def init_vertex():
@@ -31,7 +29,6 @@ def get_llm() -> GenerativeModel:
 
 
 # ===== Language switching helpers =====
-
 SWITCH_TO_EN = ["switch to english", "speak english", "english please"]
 SWITCH_TO_FR = ["switch to french", "parle francais", "parlez français", "french please"]
 SWITCH_TO_HE = ["תדבר עברית", "דבר איתי בעברית", "עברית בבקשה"]
@@ -51,7 +48,6 @@ def detect_language_switch(user_query: str) -> Optional[str]:
 
 
 # ===== Main reasoning function used by the app =====
-
 def museai_reason(
     user_query: str,
     artifact_id: Optional[int],
@@ -72,7 +68,7 @@ def museai_reason(
         }
     """
 
-    # 1 — Language switching
+    # Language switching
     switch = detect_language_switch(user_query)
     if switch:
         new_lang = switch
@@ -86,13 +82,13 @@ def museai_reason(
             "language": new_lang,
         }
 
-    # 2 — Build RAG context
+    # Build RAG context
     if artifact_id is not None:
         rag_context = build_context_for_artifact_id(artifact_id)
     else:
         rag_context = build_context_for_query(user_query, k=3)
 
-    # 3 — Prompt for the LLM
+    # Prompt for the LLM
     prompt = f"""
 You are MuseAI, a multilingual museum guide.
 
@@ -123,43 +119,64 @@ Now respond in a clear, friendly way.
 
 
 
-# import vertexai
-# from vertexai.generative_models import GenerativeModel
-# from app.rag import build_context_for_artifact_id, build_context_for_query
 
-# def museai_reason(
-#     user_query: str,
-#     artifact_id: int | None,
-#     language: str = "en",
-# ):
-#     """
-#     - If artifact_id is known (from Vision), pull artifact-specific RAG context
-#     - Otherwise use query-based RAG search
-#     - Then pass both into Gemini for reasoning
-#     """
+# -----------------------------------------------------------------------------
+# OPTIONAL MANUAL TEST FOR THIS MODULE
+#
+# If you want to test the reasoning pipeline independently (without Streamlit),
+# create a new file:
+#
+#     app/test_reasoning.py
+#
+# And paste the following code into it:
+#
+# -----------------------------------------------------------------------------
+# app/test_reasoning.py
 
-#     if artifact_id:
-#         rag_context = build_context_for_artifact_id(artifact_id)
-#     else:
-#         rag_context = build_context_for_query(user_query, k=3)
+# from pathlib import Path
+# import sys
+# from dotenv import load_dotenv
 
-#     system_prompt = f"""
-# You are MuseAI, a multilingual museum companion.
+# # --- Make sure the project root is on sys.path ---
+# ROOT = Path(__file__).resolve().parent.parent  # /.../museai
+# if str(ROOT) not in sys.path:
+#     sys.path.insert(0, str(ROOT))
 
-# Language to reply in: {language}
+# # Load .env so Vertex / GCP works
+# load_dotenv(ROOT / ".env")
 
-# Use ONLY factual information from the RAG context below.
-# If external knowledge is used, mark it as: "[additional context]".
+# # NOW this import will work
+# from app.reasoning import museai_reason
 
-# RAG CONTEXT:
-# {rag_context}
-# """
 
-#     model = GenerativeModel("gemini-2.0-flash-001")
-
-#     response = model.generate_content(
-#         [system_prompt, user_query],
-#         generation_config={"temperature": 0.4}
+# def main():
+#     # -------- Case 1: artifact_id known (e.g., from Vision) --------
+#     print("\n=== Test 1: Known artifact_id (Torah Crown, id=3) ===\n")
+#     answer1 = museai_reason(
+#         user_query="Tell me about the religious and cultural role of this object.",
+#         artifact_id=3,
+#         language="en",
 #     )
+#     print(answer1)
 
-#     return response.text.strip()
+#     # -------- Case 2: No artifact_id, only free-form query --------
+#     print("\n=== Test 2: Query-based RAG (no artifact id) ===\n")
+#     answer2 = museai_reason(
+#         user_query="Which artifact in the museum collection relates to warfare?",
+#         artifact_id=None,
+#         language="en",
+#     )
+#     print(answer2)
+
+#     # -------- Case 3: Same thing but in French --------
+#     print("\n=== Test 3: French answer ===\n")
+#     answer3 = museai_reason(
+#         user_query="Parle-moi brièvement de cet objet.",
+#         artifact_id=1,
+#         language="fr",
+#     )
+#     print(answer3)
+
+
+# if __name__ == "__main__":
+#     main()

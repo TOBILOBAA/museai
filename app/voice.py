@@ -16,7 +16,6 @@ except Exception:
 
 # ===== Config / Environment =====
 GCP_PROJECT_ID = os.getenv("GCP_PROJECT_ID")
-# Not strictly required by the v1 speech API, but we keep it for consistency
 GCP_LOCATION = os.getenv("GCP_LOCATION", "us-central1")
 
 # Short codes we’ll use in the app

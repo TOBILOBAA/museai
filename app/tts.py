@@ -1,3 +1,8 @@
+"""
+TTS module for MuseAI.
+Handles multilingual text-to-speech using ElevenLabs v3 with a unified voice.
+"""
+
 import os
 import streamlit as st
 from pathlib import Path
@@ -63,5 +68,51 @@ if __name__ == "__main__":
     print("Generated demo audio at:", demo_path)
 
 
+
+
+
+# # ===== Manual Test (TTS verification) =====
+# """
+# This block allows you to manually test the TTS pipeline from the terminal.
+
+# Run this from the project root:
+
+#     (venv) python app/tts.py
+
+# It will:
+#     - Generate short demo audio clips in English, French, and Hebrew
+#     - Use the multilingual ElevenLabs voice you configured
+#     - Save the resulting .mp3 files in: data/audio_output/
+
+# This is useful for confirming:
+#     ✔️ Your ElevenLabs API key is working
+#     ✔️ Your VOICE_ID_MULTI supports multilingual output
+#     ✔️ Audio files are being generated and saved correctly
+# """
+
+# # app/test_tts.py
+
+# from app.tts import tts_generate_audio
+
+# if __name__ == "__main__":
+#     texts = {
+#         "en": (
+#             "Welcome to the museum. I am MuseAI, your virtual guide. "
+#             "Ask me anything about the artifacts you see."
+#         ),
+#         "fr": (
+#             "Bienvenue au musée. Je suis MuseAI, votre guide virtuel. "
+#             "Demandez-moi tout ce que vous voulez sur les objets que vous voyez."
+#         ),
+#         "he": (
+#             "ברוכים הבאים למוזיאון. אני מְיוּז־איי, המדריך הווירטואלי שלכם. "
+#             "תוכלו לשאול אותי כל דבר על המוצגים שאתם רואים."
+#         ),
+#     }
+
+#     for lang, text in texts.items():
+#         print(f"\nGenerating audio for: {lang} ...")
+#         out_path = tts_generate_audio(text, language=lang)
+#         print("Saved to:", out_path)
 
     
