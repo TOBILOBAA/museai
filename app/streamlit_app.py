@@ -223,7 +223,7 @@ def apply_global_styles():
 
         /* Camera inner container (the big white box) */
         [data-testid="stCameraInput"] > div {
-            background-color: #111318 !important;
+            background-color: None !important;
         }
 
         /* Permission message ("This app would like to use your camera.") */
@@ -245,7 +245,7 @@ def apply_global_styles():
             visibility: visible !important;
             background: #111318 !important;          /* dark pill */
             color: #ffffff !important;               /* white text */
-            border: 1px solid #2c2f3a !important;
+            border: 0px 0px 1px 1px 1px solid #2c2f3a !important;
             border-radius: 10px !important;
             padding: 0.5rem 1.4rem !important;
             font-weight: 600 !important;
