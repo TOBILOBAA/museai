@@ -1,26 +1,25 @@
-from dotenv import load_dotenv
-load_dotenv()
-
+import io
 import os
+import sys
 import json
-# import streamlit as st
+import pandas as pd
+import vertexai
+
+from PIL import Image
 from pathlib import Path
 from typing import Dict, Any, List
+from google.oauth2 import service_account
+from vertexai.generative_models import GenerativeModel, Part
+from google.api_core.exceptions import GoogleAPICallError, ServiceUnavailable
+from dotenv import load_dotenv
+load_dotenv()
 
 try:
     import streamlit as st   # available on Streamlit Cloud
 except Exception:
     st = None               # harmless fallback for local CLI tests
 
-import pandas as pd
-import mimetypes
-import vertexai
-from google.oauth2 import service_account
-from vertexai.generative_models import GenerativeModel, Part
-from google.api_core.exceptions import GoogleAPICallError, ServiceUnavailable
 
-from PIL import Image
-import io
 
 # ====== Paths & Config ======
 BASE_DIR = Path(__file__).resolve().parent.parent  # museai/
@@ -29,7 +28,7 @@ ARTIFACTS_CSV = DATA_DIR / "artifacts.csv"
 
 GCP_PROJECT_ID = os.getenv("GCP_PROJECT_ID")
 GCP_LOCATION = os.getenv("GCP_LOCATION", "us-central1")
-VISION_MODEL_NAME = os.getenv("VISION_MODEL_NAME", "gemini-2.0-flash-001")
+VISION_MODEL_NAME = os.getenv("VISION_MODEL_NAME") # "gemini-2.0-flash-001"
 
 # ===== Helper: resize + normalize image for Gemini Vision =====
 def prepare_image_bytes(path: Path, max_side: int = 1024) -> bytes:
@@ -41,7 +40,7 @@ def prepare_image_bytes(path: Path, max_side: int = 1024) -> bytes:
     issues with giant phone camera images.
     """
     with Image.open(path) as img:
-        img = img.convert("RGB")  # ensure 3-channel
+        img = img.convert("RGB")  
         w, h = img.size
         long_side = max(w, h)
 
@@ -101,17 +100,16 @@ def _load_sa_credentials():
     """
     Load Google Cloud service-account credentials from either:
     - GOOGLE_APPLICATION_CREDENTIALS file (local dev), OR
-    - GCP_SERVICE_ACCOUNT_JSON in Streamlit secrets, OR
-    - GCP_SERVICE_ACCOUNT_JSON in env.
+    - GCP_SERVICE_ACCOUNT_JSON in Streamlit secrets.
 
     Raises RuntimeError with a clear message if JSON is invalid.
     """
-    # 1) Local JSON file (for your laptop dev)
+    # Local JSON file (for your laptop dev)
     path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
     if path and Path(path).exists():
         return service_account.Credentials.from_service_account_file(path)
 
-    # 2) Streamlit Cloud: value in st.secrets
+    # Streamlit Cloud: value in st.secrets
     if st is not None and "GCP_SERVICE_ACCOUNT_JSON" in st.secrets:
         raw = st.secrets["GCP_SERVICE_ACCOUNT_JSON"]
 
@@ -129,7 +127,7 @@ def _load_sa_credentials():
 
         return service_account.Credentials.from_service_account_info(info)
 
-    # 3) Environment variable (for other hosts)
+    # Environment variable (for other hosts)
     sa_json = os.getenv("GCP_SERVICE_ACCOUNT_JSON")
     if sa_json:
         try:
@@ -157,7 +155,7 @@ def init_vertex():
     if creds is not None:
         vertexai.init(project=project, location=location, credentials=creds)
     else:
-        # fallback – local dev with ADC
+        # fallback – local dev with ADC: Application Default Credientials
         vertexai.init(project=project, location=location)
 
 
@@ -173,7 +171,7 @@ def get_vision_model() -> GenerativeModel:
 
 def load_artifacts() -> pd.DataFrame:
     """
-    Load the artifacts table you created in artifacts.csv.
+    Load the artifacts table created in artifacts.csv.
     """
     if not ARTIFACTS_CSV.exists():
         raise FileNotFoundError(f"Artifacts CSV not found: {ARTIFACTS_CSV}")
@@ -231,10 +229,10 @@ def classify_artifact_from_image(image_path: Path | str) -> Dict[str, Any]:
     which known artifact it is most likely showing.
 
     Returns a dict with:
-    - artifact_id
-    - title
-    - confidence
-    - reason
+    - artifact_id (int or None)
+    - title (str or None)
+    - confidence ("high" | "medium" | "low")
+    - reason (short explanation, or why no match was found)
     """
     image_path = Path(image_path)
     if not image_path.exists():
@@ -250,24 +248,20 @@ def classify_artifact_from_image(image_path: Path | str) -> Dict[str, Any]:
         response = model.generate_content(
             [prompt, img_part],
             generation_config={
-                "temperature": 0.2,
+                "temperature": 0.2|,
                 "response_mime_type": "application/json",
             },
         )
     except ServiceUnavailable as e:
-        # This is what you just saw in Streamlit Cloud
-        # You can log this in Streamlit as well later if needed.
         raise RuntimeError(
             "Gemini Vision service is temporarily unavailable. "
             "Please wait a moment and try capturing the artifact again."
         ) from e
     except GoogleAPICallError as e:
-        # Catch other API-level issues, so your app doesn't just crash.
         raise RuntimeError(
             f"Error calling Gemini Vision API: {e}"
         ) from e
 
-    # response.text should be a JSON string according to our instructions
     try:
         result = json.loads(response.text)
     except json.JSONDecodeError:
@@ -283,9 +277,37 @@ def classify_artifact_from_image(image_path: Path | str) -> Dict[str, Any]:
 
     return result
 
-
+# ========================================================================
+# OPTIONAL: Command-line test helper for developers
+# ------------------------------------------------------------------------
+# This block lets you test the artifact classification pipeline
+# *without* running the Streamlit UI.
+#
+# Usage (from the project root, for example):
+#     python app/vision.py path/to/your_image.jpg
+#
+# Requirements (developer must provide these):
+#   1. An image file on disk (e.g. a museum artifact photo).
+#   2. A CSV file at: data/artifacts.csv
+#      - This is your own artifact "database" with columns like:
+#            artifact_id, title, short_label, location, period,
+#            material, base_context
+#   3. Google Cloud / Vertex AI config:
+#        - GCP_PROJECT_ID
+#        - GCP_LOCATION   (optional, defaults to us-central1)
+#        - AND EITHER:
+#             - GOOGLE_APPLICATION_CREDENTIALS (path to SA JSON), OR
+#             - GCP_SERVICE_ACCOUNT_JSON (full JSON in env or Streamlit secrets)
+#
+# What this does:
+#   - Loads your artifacts from data/artifacts.csv
+#   - Sends the provided image to Gemini Vision
+#   - Prints the JSON classification result to the terminal
+#
+# This is ONLY for debugging / development:
+# The Streamlit app calls classify_artifact_from_image(...) internally.
+# ========================================================================
 if __name__ == "__main__":
-    import sys
     if len(sys.argv) > 1:
         test_image = Path(sys.argv[1])
     else:
