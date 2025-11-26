@@ -244,7 +244,7 @@ def classify_artifact_from_image(image_path: Path | str) -> Dict[str, Any]:
         response = model.generate_content(
             [prompt, img_part],
             generation_config={
-                "temperature": 0.2|,
+                "temperature": 0.2,
                 "response_mime_type": "application/json",
             },
         )
