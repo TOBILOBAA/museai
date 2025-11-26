@@ -28,7 +28,7 @@ ARTIFACTS_CSV = DATA_DIR / "artifacts.csv"
 
 GCP_PROJECT_ID = os.getenv("GCP_PROJECT_ID")
 GCP_LOCATION = os.getenv("GCP_LOCATION", "us-central1")
-VISION_MODEL_NAME = os.getenv("VISION_MODEL_NAME") # "gemini-2.0-flash-001"
+VISION_MODEL_NAME = os.getenv("VISION_MODEL_NAME", "gemini-2.0-flash-001") 
 
 # ===== Helper: resize + normalize image for Gemini Vision =====
 def prepare_image_bytes(path: Path, max_side: int = 1024) -> bytes:
