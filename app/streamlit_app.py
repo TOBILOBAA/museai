@@ -213,16 +213,58 @@ def apply_global_styles():
             font-size: 0.95rem !important;
         }
         
-        /* Make camera buttons always visible + dark themed */
+        /* ===== CAMERA AREA DARK MODE FIX ===== */
+        [data-testid="stCameraInput"] {
+            background-color: #111318 !important;    /* dark background */
+            border-radius: 12px !important;
+            border: 1px solid #2c2f3a !important;
+            padding: 1rem !important;
+        }
+
+        /* Camera inner container (the big white box) */
+        [data-testid="stCameraInput"] > div {
+            background-color: #111318 !important;
+        }
+
+        /* Permission message ("This app would like to use your camera.") */
+        [data-testid="stCameraInput"] label {
+            color: #ffffff !important;               /* make visible */
+            font-size: 0.9rem !important;
+            opacity: 0.9 !important;
+        }
+
+        /* The link "Learn how to allow access" */
+        [data-testid="stCameraInput"] a {
+            color: #61a8ff !important;               /* light blue for contrast */
+            text-decoration: underline !important;
+        }
+
+        /* === Camera buttons: base + hover + active === */
         [data-testid="stCameraInput"] button {
             opacity: 1 !important;
             visibility: visible !important;
-            background: #111318 !important;     /* dark button */
-            color: #ffffff !important;           /* white text */
+            background: #111318 !important;          /* dark pill */
+            color: #ffffff !important;               /* white text */
             border: 1px solid #2c2f3a !important;
             border-radius: 10px !important;
             padding: 0.5rem 1.4rem !important;
             font-weight: 600 !important;
+            box-shadow: 0 10px 24px rgba(0,0,0,0.65);
+            transition: all 0.12s ease-out;
+        }
+
+        /* Hover state */
+        [data-testid="stCameraInput"] button:hover {
+            background: #151824 !important;
+            border-color: #3a3e4c !important;
+            transform: translateY(-1px);
+            box-shadow: 0 14px 30px rgba(0,0,0,0.75);
+        }
+
+        /* Pressed state */
+        [data-testid="stCameraInput"] button:active {
+            transform: translateY(1px) scale(0.99);
+            box-shadow: 0 7px 18px rgba(0,0,0,0.6);
         }
 
         /* ===== SIDEBAR – dark like main area & nice button ===== */
