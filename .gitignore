@@ -72,3 +72,6 @@ app/museai_ui_prototype.py
 
 # Cache
 app/__pycache__/
+
+# macOS system files
+.DS_Store
