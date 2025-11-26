@@ -9,7 +9,6 @@ from pathlib import Path
 from typing import List, Dict
 from google.oauth2 import service_account
 from vertexai.language_models import TextEmbeddingModel
-from google.oauth2 import service_account
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -37,7 +36,6 @@ EMBEDDING_MODEL_NAME = "text-embedding-004"   # Vertex AI Text Embedding Model
 
 
 # ====== Vertex / Embeddings helpers ======
-
 def _get_gcp_config() -> tuple[str, str]:
     """
     Get project + location from environment variables only.
@@ -112,12 +110,11 @@ def embed_texts(texts: List[str]) -> np.ndarray:
 
 
 # ====== Index building ======
-
 def load_artifact_metadata(path: Path = ARTIFACTS_CSV) -> pd.DataFrame:
     if not path.exists():
         raise FileNotFoundError(f"Metadata file not found: {path}")
     df = pd.read_csv(path)
-    # optional: ensure a simple integer index
+    # Ensures a simple integer index
     df = df.reset_index(drop=True)
     return df
 
@@ -151,7 +148,6 @@ def build_and_save_vectorstore():
 
 
 # ====== Index loading & retrieval ======
-
 def load_vectorstore():
     if not VECTOR_INDEX_PATH.exists():
         raise FileNotFoundError(
@@ -206,6 +202,7 @@ def build_context_for_query(query: str, k: int = 3) -> str:
 
     return "\n---\n".join(chunks)
 
+
 def build_context_for_artifact_id(artifact_id: int) -> str:
     """Return RAG context specifically for a known artifact."""
     _, df = load_vectorstore()  # loads FAISS + metadata
@@ -224,7 +221,39 @@ def build_context_for_artifact_id(artifact_id: int) -> str:
         f"Description: {r['base_context']}\n"
     )
 
-# Simple manual test when you run: python app/rag.py
+
+
+# ================================================================
+# Manual Test (RAG Pipeline)
+# ---------------------------------------------------------------
+# This block allows me to test the RAG pipeline independently
+# from the rest of the MuseAI application.
+#
+# WHY THIS TEST EXISTS:
+# - I follow a "code → test → code → test" workflow.
+# - After implementing the RAG pipeline (FAISS + embeddings),
+#   I needed a simple way to verify that:
+#       1. The artifacts.csv file loads correctly
+#       2. Embeddings are generated successfully
+#       3. The FAISS index builds without errors
+#       4. Retrieval returns the top-k matching artifacts
+#       5. The RAG context format looks correct before connecting reasoning.py
+#
+# WHAT THIS TEST DOES:
+# - Rebuilds the vector index from artifacts.csv
+# - Saves FAISS + metadata parquet
+# - Performs a sample retrieval using a simple query string
+# - Prints out the final RAG context block that will later be
+#   injected into the reasoning LLM during the full pipeline.
+#
+# WHEN I USE THIS:
+# - Every time I update artifacts.csv
+# - Every time I refine how context is constructed
+# - Before integrating this RAG output with reasoning.py
+#
+# HOW TO RUN:
+#   python app/rag.py
+# ================================================================
 if __name__ == "__main__":
     print("Building vector store from artifacts.csv …")
     build_and_save_vectorstore()

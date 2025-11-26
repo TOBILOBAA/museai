@@ -1,21 +1,20 @@
-from dotenv import load_dotenv
-load_dotenv()
-
 import os
 import json
 from pathlib import Path
 from typing import Literal, Tuple
+from google.cloud import speech_v1p1beta1 as speech
+from google.oauth2 import service_account
+from dotenv import load_dotenv
+load_dotenv()
 
 try:
     import streamlit as st   # available on Streamlit Cloud
 except Exception:
     st = None               # harmless fallback for local CLI tests
 
-from google.cloud import speech_v1p1beta1 as speech
-from google.oauth2 import service_account
+
 
 # ===== Config / Environment =====
-
 GCP_PROJECT_ID = os.getenv("GCP_PROJECT_ID")
 # Not strictly required by the v1 speech API, but we keep it for consistency
 GCP_LOCATION = os.getenv("GCP_LOCATION", "us-central1")

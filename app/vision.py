@@ -273,6 +273,8 @@ def classify_artifact_from_image(image_path: Path | str) -> Dict[str, Any]:
 
     return result
 
+
+
 # ========================================================================
 # OPTIONAL: Command-line test helper for developers
 # ------------------------------------------------------------------------
