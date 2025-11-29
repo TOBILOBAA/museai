@@ -1,17 +1,18 @@
 import os
 import sys
-import streamlit as st
-
 from pathlib import Path
-from app.vision import classify_artifact_from_image
-from app.voice import transcribe_and_detect_language, LanguageCode
-from app.reasoning import museai_reason
-from app.tts import tts_generate_audio
 
 # --- make sure the project root is on sys.path (needed on Streamlit Cloud) ---
 ROOT_DIR = Path(__file__).resolve().parent.parent
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
+
+import streamlit as st
+
+from app.vision import classify_artifact_from_image
+from app.voice import transcribe_and_detect_language, LanguageCode
+from app.reasoning import museai_reason
+from app.tts import tts_generate_audio
 
 # ------------------------------------------------------------------------------------
 # Basic config
