@@ -124,7 +124,7 @@ def build_and_save_vectorstore():
     """Create FAISS index from artifacts.csv and save index + metadata."""
     df = load_artifact_metadata()
 
-    # Text we embed = title + short label + base_context
+    # Text embed = title + short label + base_context
     texts = (
         df["title"].fillna("") + " - " +
         df["short_label"].fillna("") + " | " +
