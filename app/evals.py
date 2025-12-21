@@ -437,7 +437,7 @@ def evaluate_grounding_effect() -> pd.DataFrame:
 
 
 # ============================================================
-# FIX 1: Embedding Cache (Evaluation Only)
+# Embedding Cache
 # ============================================================
 
 # Cache to avoid re-embedding the same text repeatedly
