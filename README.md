@@ -46,44 +46,6 @@ The system uses a camera snapshot to identify an artifact, listens to your spoke
 
 ⸻
 
-🗂 Project Structure
-
-museai/
-│
-├── app/
-│   ├── vision.py            → Gemini Vision artifact recognition
-│   ├── rag.py               → Embeddings, FAISS indexing, RAG retrieval
-│   ├── voice.py             → Google STT (EN/FR/HE)
-│   ├── reasoning.py         → Gemini Flash reasoning layer + language switching
-│   ├── tts.py               → ElevenLabs TTS output
-│   ├── streamlit_app.py     → Full UI logic
-
-│
-├── data/
-│   ├── artifacts.csv
-│   ├── artifacts_index.faiss
-│   ├── artifacts_metadata.parquet
-│
-├── .env                     → API keys / config during local development
-└── requirements.txt
-
-
-⸻
-
-🧪 Running the Tests
-
-1️⃣ End-to-End Pipeline Test (no UI)
-
-This tests STT → RAG → LLM → TTS in a terminal.
-
-python app/test_full_pipeline.py
-
-Requires:
-	•	data/audio/sample_en.wav
-	•	Proper environment variables
-	•	FAISS index already built
-
-⸻
 
 ▶️ Running the Full App
 
