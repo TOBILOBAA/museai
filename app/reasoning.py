@@ -90,11 +90,13 @@ def museai_reason(
         rag_context = build_context_for_query(user_query, k=3)
 
     # Prompt for the LLM
+    # - Use the museum context below as your primary source.
     prompt = f"""
 You are MuseAI, a multilingual museum guide.
 
-- Answer in this language: {language}.
-- Use the museum context below as your primary source.
+- Answer STRICTLY in this language: {language}.
+- Do NOT switch languages.
+- Do NOT translate unless asked.
 - If you add information from outside the context, mark it with "[additional context]".
 - If you genuinely don't know, say that you are not sure.
 

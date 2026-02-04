@@ -67,7 +67,7 @@ STRINGS = {
 }
 
 
-def get_lang_label(lang_code: STRINGS) -> str:
+def get_lang_label(lang_code: str) -> str:
     for label, code in LANG_OPTIONS.items():
         if code == lang_code:
             return label
@@ -316,6 +316,14 @@ def init_session_state():
     if "language" not in st.session_state:
         st.session_state.language: LanguageCode = "en"
 
+    # UI language ()Labels/buttons 
+    if "ui_language" not in st.session_state:
+        st.session_state.ui_language = st.session_state.language
+    
+    # AI response language (Gemini + TTS)
+    if "response_language" not in st.session_state:
+        st.session_state.response_language = st.session_state.language
+
     if "artifact" not in st.session_state:
         st.session_state.artifact = None  # dict from classify_artifact_from_image
 
@@ -384,7 +392,10 @@ def render_top_bar():
             st.markdown("</div>", unsafe_allow_html=True)
 
         # sync language from splash top-right selector
-        st.session_state.language = LANG_OPTIONS[selected_top_label]
+        chosen = LANG_OPTIONS[selected_top_label]
+        st.session_state.language = chosen              # keep for compatibility
+        st.session_state.ui_language = chosen
+        st.session_state.response_language = chosen
 
     else:
         # MAIN SCREEN STATE → ONLY LOGO (no language select here)
@@ -397,7 +408,7 @@ def render_top_bar():
 
 def show_splash_screen():
     """Splash screen before the main UI – using STRINGS for text."""
-    txt = STRINGS.get(st.session_state.language, STRINGS["en"])
+    txt = STRINGS.get(st.session_state.ui_language, STRINGS["en"])
 
     st.markdown(
         f"""
@@ -431,7 +442,11 @@ def render_sidebar():
             index=list(LANG_OPTIONS.keys()).index(current_label),
             key="_sidebar_lang_select",
         )
-        st.session_state.language = LANG_OPTIONS[selected_label]
+
+        chosen = LANG_OPTIONS[selected_label]
+        st.session_state.language = chosen           # keep for compatibility
+        st.session_state.ui_language = chosen
+        st.session_state.response_language = chosen
 
         st.markdown("---")
         if st.button("Start new artifact tour", use_container_width=True):
@@ -582,10 +597,9 @@ def render_conversation_area():
     # Decide which language to answer in
     if detected_lang in ("en", "fr", "he"):
         reply_language = detected_lang
-        # keep UI language in sync with what we detected
-        st.session_state.language = detected_lang
+        st.session_state.response_language = detected_lang  # only response changes
     else:
-        reply_language = "en"
+        reply_language = st.session_state.response_language or "en"
 
     artifact_id = None
     if isinstance(st.session_state.artifact, dict):
@@ -605,6 +619,9 @@ def render_conversation_area():
             artifact_id=artifact_id,
             language=reply_language,
         )
+
+    if isinstance(llm_raw, dict) and "language" in llm_raw:
+        st.session_state.language = llm_raw["language"]
 
     # Handle both string or dict response from museai_reason
     if isinstance(llm_raw, dict):
